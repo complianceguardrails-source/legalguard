@@ -243,15 +243,13 @@ function AddUseCaseModal({ visible, onClose, regulations, onSubmitted }) {
                 ))}
               </View>
 
-              <Text style={styles.fieldLabel}>Does it decide something about a specific person?</Text>
+              <Text style={styles.fieldLabel}>Does it decide something about a person or people?</Text>
               <View style={styles.chipRow}>
                 <TouchableOpacity
                   style={[styles.chip, affectsIndividual === true && styles.chipSelected]}
                   onPress={() => setAffectsIndividual(true)}
                 >
-                  <Text style={[styles.chipText, affectsIndividual === true && styles.chipTextSelected]}>
-                    Yes, an individual
-                  </Text>
+                  <Text style={[styles.chipText, affectsIndividual === true && styles.chipTextSelected]}>Yes</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.chip, affectsIndividual === false && styles.chipSelected]}
@@ -261,7 +259,7 @@ function AddUseCaseModal({ visible, onClose, regulations, onSubmitted }) {
                   }}
                 >
                   <Text style={[styles.chipText, affectsIndividual === false && styles.chipTextSelected]}>
-                    No, internal only
+                    No, internal processes
                   </Text>
                 </TouchableOpacity>
               </View>
