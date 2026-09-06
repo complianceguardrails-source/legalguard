@@ -1,0 +1,19 @@
+node_modules/
+.expo/
+.expo-shared/
+dist/
+web-build/
+*.log
+.env
+.venv/
+.venv*/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Local/production PostgREST runtime configs -- contain real db-uri
+# credentials (Neon password, or local trust-auth details). Production
+# config lives in Render's own dashboard env vars instead (see render.yaml
+# and docs/POSTGREST.md).
+postgrest.local.conf
+postgrest.neon.conf

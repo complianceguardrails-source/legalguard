@@ -1,0 +1,25 @@
+# Render Blueprint for the always-on PostgREST layer in front of Neon.
+# See docs/POSTGREST.md section 4 for the manual dashboard walkthrough --
+# use whichever path you prefer, they produce the same service.
+#
+# PGRST_DB_URI is intentionally left as sync: false so Render prompts for
+# it once, in its own dashboard, during Blueprint creation. It is never
+# committed to this file or this repo.
+services:
+  - type: web
+    name: legalguard-postgrest
+    runtime: image
+    plan: free
+    image:
+      url: docker.io/postgrest/postgrest:v14.13
+    envVars:
+      - key: PGRST_DB_URI
+        sync: false
+      - key: PGRST_DB_SCHEMAS
+        value: public
+      - key: PGRST_DB_ANON_ROLE
+        value: web_anon
+      - key: PGRST_SERVER_HOST
+        value: "0.0.0.0"
+      - key: PGRST_SERVER_PORT
+        value: "10000"

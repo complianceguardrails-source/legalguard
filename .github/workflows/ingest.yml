@@ -1,0 +1,47 @@
+name: Nightly Regulatory Ingestion
+
+# Runs the ingestion engine for free on GitHub-hosted runners. No server to
+# keep alive, no hosting bill -- the workflow wakes up, runs the crawler
+# against the shared Postgres instance, and shuts down.
+
+on:
+  schedule:
+    # 03:17 UTC daily. Off-the-hour minute to avoid the GitHub Actions
+    # "everyone runs at :00" scheduling pile-up/delay.
+    - cron: "17 3 * * *"
+  workflow_dispatch: {} # allows manual "Run workflow" trigger from the Actions tab
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: ingestion/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r ingestion/requirements.txt
+
+      - name: Run ingestion
+        working-directory: ingestion
+        env:
+          # Add DATABASE_URL as a repo secret: Settings -> Secrets and
+          # variables -> Actions -> New repository secret. Use your free
+          # Neon.tech (or Supabase) Postgres connection string.
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python main.py
+
+      - name: Recompute trend-based Horizon forecasts
+        # Runs after ingestion so it sees tonight's newly-classified
+        # origin_driver_category values -- real quarter-over-quarter signal
+        # from specific_regulations, not the hand-seeded rows in seed.sql.
+        # See sources/horizon_forecaster.py for what "accelerating" means.
+        working-directory: ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python generate_horizon_forecasts.py

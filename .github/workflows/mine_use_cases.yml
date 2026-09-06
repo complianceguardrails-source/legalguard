@@ -1,0 +1,38 @@
+name: Weekly Use-Case Discovery
+
+# Mines GitHub for open-source financial-AI repos across the full tier
+# taxonomy (consumer lending, mortgages, green finance, front-office voice
+# agents, CIB, AML/KYC, etc.) and adds new ones to banking_use_cases.
+# Runs weekly, not nightly like ingest.yml -- new repos in this space don't
+# appear anywhere near as often as regulatory text changes, and the GitHub
+# Search API's rate limit makes running this more often wasteful.
+
+on:
+  schedule:
+    - cron: "40 4 * * 1" # Mondays 04:40 UTC
+  workflow_dispatch: {}
+
+jobs:
+  mine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: ingestion/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r ingestion/requirements.txt
+
+      - name: Run use-case miner
+        working-directory: ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # GITHUB_TOKEN is auto-provided by Actions and raises the Search
+          # API rate limit from 10/min to 30/min -- no extra secret needed.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python mine_use_cases.py
