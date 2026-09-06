@@ -143,7 +143,16 @@ export async function fetchAdminReferenceGuardrails() {
  * banking_use_cases -- see docs/POSTGREST.md. Throws if EXPO_PUBLIC_API_URL
  * isn't set, since there's nowhere to persist a mock write to.
  */
-export async function submitUseCase({ name, parentSector, modality, description, submittedByGithubUsername }) {
+export async function submitUseCase({
+  name,
+  parentSector,
+  modality,
+  description,
+  submittedByGithubUsername,
+  githubReferenceUrl,
+  operatingJurisdictions,
+  riskTier,
+}) {
   if (!API_URL) {
     throw new Error("No backend configured (EXPO_PUBLIC_API_URL not set) -- can't persist a new use case yet.");
   }
@@ -160,6 +169,9 @@ export async function submitUseCase({ name, parentSector, modality, description,
       description,
       source: "user_submitted",
       submitted_by_github_username: submittedByGithubUsername || null,
+      github_reference_url: githubReferenceUrl || null,
+      operating_jurisdictions: operatingJurisdictions && operatingJurisdictions.length > 0 ? operatingJurisdictions : null,
+      risk_tier: riskTier || "unclassified",
     }),
   });
   if (!res.ok) {

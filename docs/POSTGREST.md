@@ -70,20 +70,33 @@ natively) once you're past the free single-user prototype.
 
 The Knowledge Base screen's "Add your own use case" flow (`app/lib/api.js`
 `submitUseCase()`) needs `INSERT` on `banking_use_cases` specifically --
-grant only that, not broad write access:
+grant only that, not broad write access. Applied to both the local dev DB
+and production (Neon):
 
 ```sql
-GRANT INSERT (name, parent_sector, modality, description, source, submitted_by_github_username)
+GRANT INSERT (name, parent_sector, modality, description, source, submitted_by_github_username,
+              github_reference_url, operating_jurisdictions, risk_tier)
     ON banking_use_cases TO web_anon;
 ```
 
 This is intentionally column-scoped: `web_anon` can create a new row but
-can't set `id`, `risk_tier`, `github_reference_url`, or overwrite existing
-rows (no `UPDATE` grant). Since there's no real user auth in the free/open
-prototype, anyone with the API URL can call this endpoint -- acceptable for
-a personal/community instance, but add row-level throttling or move to
-JWT-authenticated writes before treating this as a public multi-tenant
-service.
+can't set `id`, or overwrite existing rows (no `UPDATE` grant).
+`github_reference_url` IS writable here -- a submitter linking the
+open-source repo their use case is based on is just as legitimate a source
+as what the GitHub-mining pipeline itself would find, so it's treated the
+same as the other free-text fields, not held to the same
+system-controlled standard as `id`. `risk_tier` is also writable, but not
+as a raw free-choice field -- the app computes it client-side
+(`app/lib/riskTierHeuristic.js::deriveRiskTier()`) from two structured
+proxy answers ("does this decide something about a specific person?",
+"does a human review before action?") that mirror the actual legal trigger
+most profiling/automated-decision laws in this database use, rather than
+asking a submitter to self-assign EU AI Act risk-tier terminology directly.
+Since there's no real user auth in the free/open prototype, anyone with
+the API URL can call this endpoint -- acceptable for a personal/community
+instance, but add
+row-level throttling or move to JWT-authenticated writes before treating
+this as a public multi-tenant service.
 
 ## 4. Free hosting for the always-on PostgREST process
 

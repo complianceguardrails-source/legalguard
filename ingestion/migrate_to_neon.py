@@ -34,12 +34,28 @@ TABLES = [
 ]
 
 
+def _decode_value(v):
+    if isinstance(v, (bytes, bytearray)):
+        return v.decode("utf-8")
+    if isinstance(v, list):
+        # TEXT[] columns (e.g. upstream_catalyst_drivers) hit the same
+        # bytes-vs-str quirk on their individual elements, not just at the
+        # top level -- missing this recursive case is exactly what let
+        # every regulatory_horizon_forecast row's array elements get
+        # migrated as bytea-hex-literal garbage (\x6d61726b...) instead of
+        # plain text, since the outer value is a list, not bytes itself,
+        # so a shallow isinstance check on the row tuple never touched it.
+        return [_decode_value(item) for item in v]
+    return v
+
+
 def _decode_row(row):
-    # This local connection returns some TEXT/VARCHAR columns as raw bytes
-    # rather than str (a driver/libpq quirk seen throughout this project's
-    # scripts) -- no column in this schema is meant to hold real binary
-    # data, so decoding any stray bytes as utf-8 is always safe here.
-    return tuple(v.decode("utf-8") if isinstance(v, (bytes, bytearray)) else v for v in row)
+    # This local connection returns some TEXT/VARCHAR columns (and, as
+    # above, array elements) as raw bytes rather than str (a driver/libpq
+    # quirk seen throughout this project's scripts) -- no column in this
+    # schema is meant to hold real binary data, so decoding any stray bytes
+    # as utf-8 is always safe here.
+    return tuple(_decode_value(v) for v in row)
 
 
 def copy_table(local_conn, neon_conn, table: str) -> int:

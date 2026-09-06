@@ -6,6 +6,7 @@ import { colors, type, radius } from "../theme";
 import { fetchUseCases, fetchRegulations, submitUseCase } from "../lib/api";
 import { getGitHubCredentials } from "../lib/auth";
 import { matchRegulationsForUseCase } from "../lib/tagger";
+import { deriveRiskTier } from "../lib/riskTierHeuristic";
 import { MODALITY_ICON, RISK_TIER_STYLE } from "../lib/useCaseDisplay";
 import MetadataPill from "../components/MetadataPill";
 
@@ -19,6 +20,16 @@ const SECTOR_OPTIONS = [
   "Climate & Sustainable Finance",
 ];
 const MODALITY_OPTIONS = ["structured", "vision", "voice_agentic", "rag_document", "multi_agent"];
+// Plain-language jurisdiction options -- "where does this operate" rather
+// than "which regulations apply to you". Codes match specific_regulations'
+// informal convention (EU | US | US-CA | UK ...) so a prefix match in
+// tagger.js::matchRegulationsForUseCase works directly.
+const JURISDICTION_OPTIONS = [
+  { code: "US", label: "United States" },
+  { code: "EU", label: "European Union" },
+  { code: "UK", label: "United Kingdom" },
+  { code: "OTHER", label: "Other / Global" },
+];
 
 export default function KnowledgeBaseScreen() {
   const [useCases, setUseCases] = useState([]);
@@ -82,14 +93,26 @@ function AddUseCaseModal({ visible, onClose, regulations, onSubmitted }) {
   const [sector, setSector] = useState(SECTOR_OPTIONS[0]);
   const [modality, setModality] = useState(MODALITY_OPTIONS[0]);
   const [description, setDescription] = useState("");
+  const [githubUrl, setGithubUrl] = useState("");
+  const [operatingJurisdictions, setOperatingJurisdictions] = useState([]);
+  const [affectsIndividual, setAffectsIndividual] = useState(null); // null = not yet answered
+  const [automationDegree, setAutomationDegree] = useState(null); // 'full' | 'reviewed'
   const [busy, setBusy] = useState(false);
   const [matches, setMatches] = useState(null);
+
+  const toggleJurisdiction = (code) => {
+    setOperatingJurisdictions((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
+  };
 
   const reset = () => {
     setName("");
     setDescription("");
+    setGithubUrl("");
     setSector(SECTOR_OPTIONS[0]);
     setModality(MODALITY_OPTIONS[0]);
+    setOperatingJurisdictions([]);
+    setAffectsIndividual(null);
+    setAutomationDegree(null);
     setMatches(null);
   };
 
@@ -100,20 +123,37 @@ function AddUseCaseModal({ visible, onClose, regulations, onSubmitted }) {
 
   const handleSubmit = async () => {
     if (!name.trim()) return Alert.alert("Name required", "Give your use case a short name.");
+    if (operatingJurisdictions.length === 0) {
+      return Alert.alert("Jurisdiction required", "Select at least one region this system operates in.");
+    }
+    if (affectsIndividual === null) {
+      return Alert.alert("One more question", "Let us know whether this system decides something about a specific person.");
+    }
+    if (affectsIndividual && automationDegree === null) {
+      return Alert.alert("One more question", "Let us know whether a human reviews the outcome before it's acted on.");
+    }
     setBusy(true);
     try {
       const { username } = await getGitHubCredentials();
+      const riskTier = deriveRiskTier({ affectsIndividual, automationDegree });
       await submitUseCase({
         name: name.trim(),
         parentSector: sector,
         modality,
         description: description.trim(),
         submittedByGithubUsername: username,
+        githubReferenceUrl: githubUrl.trim() || null,
+        operatingJurisdictions,
+        riskTier,
       });
 
       // Candidate compliance matches, computed locally against whatever
       // regulations are already loaded -- no server round-trip needed.
-      const found = matchRegulationsForUseCase({ name, description, modality, parent_sector: sector }, regulations);
+      const found = matchRegulationsForUseCase(
+        { name, description, modality, parent_sector: sector },
+        regulations,
+        { operatingJurisdictions }
+      );
       setMatches(found);
       onSubmitted();
     } catch (err) {
@@ -181,6 +221,85 @@ function AddUseCaseModal({ visible, onClose, regulations, onSubmitted }) {
                 placeholder="What does this AI system do, and what data/decisions does it touch?"
                 placeholderTextColor={colors.textMuted}
                 multiline
+              />
+
+              <Text style={styles.fieldLabel}>Where does this operate?</Text>
+              <View style={styles.chipRow}>
+                {JURISDICTION_OPTIONS.map((opt) => (
+                  <TouchableOpacity
+                    key={opt.code}
+                    style={[styles.chip, operatingJurisdictions.includes(opt.code) && styles.chipSelected]}
+                    onPress={() => toggleJurisdiction(opt.code)}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        operatingJurisdictions.includes(opt.code) && styles.chipTextSelected,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.fieldLabel}>Does it decide something about a specific person?</Text>
+              <View style={styles.chipRow}>
+                <TouchableOpacity
+                  style={[styles.chip, affectsIndividual === true && styles.chipSelected]}
+                  onPress={() => setAffectsIndividual(true)}
+                >
+                  <Text style={[styles.chipText, affectsIndividual === true && styles.chipTextSelected]}>
+                    Yes, an individual
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.chip, affectsIndividual === false && styles.chipSelected]}
+                  onPress={() => {
+                    setAffectsIndividual(false);
+                    setAutomationDegree(null);
+                  }}
+                >
+                  <Text style={[styles.chipText, affectsIndividual === false && styles.chipTextSelected]}>
+                    No, internal only
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {affectsIndividual === true && (
+                <>
+                  <Text style={styles.fieldLabel}>Does a human review before action?</Text>
+                  <View style={styles.chipRow}>
+                    <TouchableOpacity
+                      style={[styles.chip, automationDegree === "full" && styles.chipSelected]}
+                      onPress={() => setAutomationDegree("full")}
+                    >
+                      <Text style={[styles.chipText, automationDegree === "full" && styles.chipTextSelected]}>
+                        Fully automated
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.chip, automationDegree === "reviewed" && styles.chipSelected]}
+                      onPress={() => setAutomationDegree("reviewed")}
+                    >
+                      <Text style={[styles.chipText, automationDegree === "reviewed" && styles.chipTextSelected]}>
+                        Human reviews first
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+
+              <Text style={styles.fieldLabel}>GitHub repo (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={githubUrl}
+                onChangeText={setGithubUrl}
+                placeholder="https://github.com/owner/repo"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
               />
 
               <TouchableOpacity style={styles.submitButton} onPress={handleSubmit} disabled={busy}>

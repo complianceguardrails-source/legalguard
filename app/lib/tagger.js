@@ -26,13 +26,31 @@ function jaccard(setA, setB) {
   return unionSize === 0 ? 0 : intersectionSize / unionSize;
 }
 
+// "US" boosts both plain "US" (federal) and "US-CA"-style state codes;
+// "Other/Global" (or nothing selected) applies no boost at all -- there's
+// no principled jurisdiction to prefer in that case, so scores are left
+// exactly as the keyword overlap alone produced them.
+const JURISDICTION_BOOST = 1.5;
+
+function jurisdictionBoost(regJurisdiction, operatingJurisdictions) {
+  if (!operatingJurisdictions || operatingJurisdictions.length === 0) return 1;
+  const matches = operatingJurisdictions.some(
+    (code) => code !== "OTHER" && (regJurisdiction || "").startsWith(code)
+  );
+  return matches ? JURISDICTION_BOOST : 1;
+}
+
 /**
  * @param {{name: string, description?: string, modality?: string, parent_sector?: string}} useCase
  * @param {Array<{reg_id: string, official_title: string, statutory_text?: string, jurisdiction: string, issuing_body: string}>} regulations
- * @param {{topK?: number, minScore?: number}} [options]
+ * @param {{topK?: number, minScore?: number, operatingJurisdictions?: string[]}} [options]
  * @returns {Array<{reg_id: string, official_title: string, jurisdiction: string, issuing_body: string, score: number}>}
  */
-export function matchRegulationsForUseCase(useCase, regulations, { topK = 5, minScore = 0.04 } = {}) {
+export function matchRegulationsForUseCase(
+  useCase,
+  regulations,
+  { topK = 5, minScore = 0.04, operatingJurisdictions = [] } = {}
+) {
   const useCaseText = [useCase.name, useCase.description, useCase.modality, useCase.parent_sector]
     .filter(Boolean)
     .join(" ");
@@ -42,8 +60,13 @@ export function matchRegulationsForUseCase(useCase, regulations, { topK = 5, min
   const scored = regulations
     .map((reg) => {
       const regText = [reg.official_title, reg.statutory_text].filter(Boolean).join(" ");
-      const score = jaccard(useCaseTokens, tokenize(regText));
-      return { ...reg, score: Math.round(score * 10000) / 10000 };
+      const rawScore = jaccard(useCaseTokens, tokenize(regText));
+      // Boost applied before the minScore cut -- a same-topic regulation in
+      // the submitter's own jurisdiction should be able to clear the bar
+      // even if it'd otherwise sit just below it, not just get reordered
+      // among already-qualifying matches.
+      const boosted = rawScore * jurisdictionBoost(reg.jurisdiction, operatingJurisdictions);
+      return { ...reg, score: Math.round(boosted * 10000) / 10000 };
     })
     .filter((r) => r.score >= minScore)
     .sort((a, b) => b.score - a.score);

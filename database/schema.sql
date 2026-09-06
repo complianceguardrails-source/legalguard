@@ -29,6 +29,11 @@ CREATE TABLE banking_use_cases (
     source                VARCHAR(30) NOT NULL DEFAULT 'curated'
         CHECK (source IN ('curated', 'github_mined', 'user_submitted')),
     submitted_by_github_username VARCHAR(150), -- set when source = 'user_submitted'
+    -- Self-reported coarse country/region codes (US, EU, UK, OTHER) --
+    -- biases the client-side match preview toward relevant jurisdictions,
+    -- not a certified determination. See
+    -- database/migrations/004_add_operating_jurisdictions.sql.
+    operating_jurisdictions TEXT[],
     created_at          TIMESTAMPTZ DEFAULT now(),
     updated_at          TIMESTAMPTZ DEFAULT now(),
     UNIQUE (name)
