@@ -7,6 +7,7 @@ import { fetchUseCases, fetchRegulations, submitUseCase } from "../lib/api";
 import { getGitHubCredentials } from "../lib/auth";
 import { matchRegulationsForUseCase } from "../lib/tagger";
 import { deriveRiskTier } from "../lib/riskTierHeuristic";
+import { COUNTRIES, EU_OPTION, OTHER_OPTION, expandJurisdictionCodes } from "../lib/countries";
 import { MODALITY_ICON, RISK_TIER_STYLE } from "../lib/useCaseDisplay";
 import MetadataPill from "../components/MetadataPill";
 
@@ -20,16 +21,9 @@ const SECTOR_OPTIONS = [
   "Climate & Sustainable Finance",
 ];
 const MODALITY_OPTIONS = ["structured", "vision", "voice_agentic", "rag_document", "multi_agent"];
-// Plain-language jurisdiction options -- "where does this operate" rather
-// than "which regulations apply to you". Codes match specific_regulations'
-// informal convention (EU | US | US-CA | UK ...) so a prefix match in
-// tagger.js::matchRegulationsForUseCase works directly.
-const JURISDICTION_OPTIONS = [
-  { code: "US", label: "United States" },
-  { code: "EU", label: "European Union" },
-  { code: "UK", label: "United Kingdom" },
-  { code: "OTHER", label: "Other / Global" },
-];
+// EU/Other pinned first, then every real country -- searchable by name in
+// the jurisdiction picker below.
+const JURISDICTION_OPTIONS = [EU_OPTION, OTHER_OPTION, ...COUNTRIES];
 
 export default function KnowledgeBaseScreen() {
   const [useCases, setUseCases] = useState([]);
@@ -90,11 +84,12 @@ export default function KnowledgeBaseScreen() {
 
 function AddUseCaseModal({ visible, onClose, regulations, onSubmitted }) {
   const [name, setName] = useState("");
-  const [sector, setSector] = useState(SECTOR_OPTIONS[0]);
-  const [modality, setModality] = useState(MODALITY_OPTIONS[0]);
+  const [sector, setSector] = useState(null);
+  const [modality, setModality] = useState(null);
   const [description, setDescription] = useState("");
   const [githubUrl, setGithubUrl] = useState("");
   const [operatingJurisdictions, setOperatingJurisdictions] = useState([]);
+  const [jurisdictionSearch, setJurisdictionSearch] = useState("");
   const [affectsIndividual, setAffectsIndividual] = useState(null); // null = not yet answered
   const [automationDegree, setAutomationDegree] = useState(null); // 'full' | 'reviewed'
   const [busy, setBusy] = useState(false);
@@ -104,13 +99,18 @@ function AddUseCaseModal({ visible, onClose, regulations, onSubmitted }) {
     setOperatingJurisdictions((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
   };
 
+  const filteredJurisdictionOptions = JURISDICTION_OPTIONS.filter((opt) =>
+    opt.name.toLowerCase().includes(jurisdictionSearch.trim().toLowerCase())
+  );
+
   const reset = () => {
     setName("");
     setDescription("");
     setGithubUrl("");
-    setSector(SECTOR_OPTIONS[0]);
-    setModality(MODALITY_OPTIONS[0]);
+    setSector(null);
+    setModality(null);
     setOperatingJurisdictions([]);
+    setJurisdictionSearch("");
     setAffectsIndividual(null);
     setAutomationDegree(null);
     setMatches(null);
@@ -123,6 +123,8 @@ function AddUseCaseModal({ visible, onClose, regulations, onSubmitted }) {
 
   const handleSubmit = async () => {
     if (!name.trim()) return Alert.alert("Name required", "Give your use case a short name.");
+    if (!sector) return Alert.alert("Sector required", "Pick the sector this use case belongs to.");
+    if (!modality) return Alert.alert("Modality required", "Pick this use case's modality.");
     if (operatingJurisdictions.length === 0) {
       return Alert.alert("Jurisdiction required", "Select at least one region this system operates in.");
     }
@@ -149,10 +151,13 @@ function AddUseCaseModal({ visible, onClose, regulations, onSubmitted }) {
 
       // Candidate compliance matches, computed locally against whatever
       // regulations are already loaded -- no server round-trip needed.
+      // expandJurisdictionCodes adds "EU" alongside any selected EU member
+      // country for boosting purposes only -- the raw selection above is
+      // what actually gets persisted, not this inferred expansion.
       const found = matchRegulationsForUseCase(
         { name, description, modality, parent_sector: sector },
         regulations,
-        { operatingJurisdictions }
+        { operatingJurisdictions: expandJurisdictionCodes(operatingJurisdictions) }
       );
       setMatches(found);
       onSubmitted();
@@ -224,24 +229,46 @@ function AddUseCaseModal({ visible, onClose, regulations, onSubmitted }) {
               />
 
               <Text style={styles.fieldLabel}>Where does this operate?</Text>
-              <View style={styles.chipRow}>
-                {JURISDICTION_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt.code}
-                    style={[styles.chip, operatingJurisdictions.includes(opt.code) && styles.chipSelected]}
-                    onPress={() => toggleJurisdiction(opt.code)}
-                  >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        operatingJurisdictions.includes(opt.code) && styles.chipTextSelected,
-                      ]}
-                    >
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {operatingJurisdictions.length > 0 && (
+                <View style={[styles.chipRow, { marginBottom: 6 }]}>
+                  {operatingJurisdictions.map((code) => {
+                    const opt = JURISDICTION_OPTIONS.find((o) => o.code === code);
+                    return (
+                      <TouchableOpacity
+                        key={code}
+                        style={[styles.chip, styles.chipSelected]}
+                        onPress={() => toggleJurisdiction(code)}
+                      >
+                        <Text style={[styles.chipText, styles.chipTextSelected]}>{opt?.name || code} ✕</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+              <TextInput
+                style={styles.input}
+                value={jurisdictionSearch}
+                onChangeText={setJurisdictionSearch}
+                placeholder="Search countries or jurisdictions…"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+              />
+              <ScrollView style={styles.jurisdictionList} nestedScrollEnabled>
+                {filteredJurisdictionOptions.map((opt) => {
+                  const selected = operatingJurisdictions.includes(opt.code);
+                  return (
+                    <TouchableOpacity key={opt.code} style={styles.jurisdictionRow} onPress={() => toggleJurisdiction(opt.code)}>
+                      <Text style={[styles.jurisdictionRowText, selected && styles.jurisdictionRowTextSelected]}>
+                        {selected ? "☑ " : "☐ "}
+                        {opt.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                {filteredJurisdictionOptions.length === 0 && (
+                  <Text style={[styles.jurisdictionRowText, { padding: 10 }]}>No match.</Text>
+                )}
+              </ScrollView>
 
               <Text style={styles.fieldLabel}>Does it decide something about a person or people?</Text>
               <View style={styles.chipRow}>
@@ -448,6 +475,16 @@ const styles = StyleSheet.create({
   chipSelected: { borderColor: colors.accent, backgroundColor: "#FFD16615" },
   chipText: { fontFamily: type.fontFamily, fontSize: 11, color: colors.textMuted, textTransform: "capitalize" },
   chipTextSelected: { color: colors.primary, fontFamily: type.fontFamilyMedium },
+  jurisdictionList: {
+    maxHeight: 180,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.button,
+    backgroundColor: colors.surface,
+  },
+  jurisdictionRow: { paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  jurisdictionRowText: { fontFamily: type.fontFamily, fontSize: 12, color: colors.textMain },
+  jurisdictionRowTextSelected: { fontFamily: type.fontFamilyMedium, color: colors.accentHover },
   submitButton: {
     backgroundColor: colors.accent,
     borderRadius: radius.button,
