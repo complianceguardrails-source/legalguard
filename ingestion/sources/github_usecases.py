@@ -90,6 +90,32 @@ DEFAULT_QUERIES = [
     # loose-matching problem as the earlier customer-support/basis-risk
     # queries, surfacing only generic mega-star "awesome"/tutorial lists.
     '"PII detection" OR "sensitive data classification" in:name,description,readme',
+    # Added on request: fraud detection and green/sustainable finance were
+    # already covered above (see "fraud detection banking machine learning"
+    # and the sustainable/climate finance axis). Tested and DROPPED after
+    # checking real results: decarbonization/decarbonisation, carbon
+    # accounting, carbon credit, energy transition, energy systems, energy
+    # infrastructure, energy grid, and consumer/customer profiling all
+    # returned mostly generic "awesome-X" aggregator lists and unrelated
+    # mega-star repos regardless of phrasing (the same "OR"+bare "AI"
+    # precedence issue documented above for basis-risk/retrofit-finance,
+    # but here even single-phrase-only variants stayed noisy) -- consumer/
+    # customer profiling specifically returned zero relevant hits in either
+    # phrasing. Consistent with "customer support" being dropped earlier
+    # for the same reason: not worth keeping a noisy recurring query.
+    #
+    # "biodiversity credit" is the one that worked -- best signal of
+    # everything tested, extending the existing "nature finance
+    # biodiversity risk" query to biodiversity *credits* specifically. Not
+    # perfectly precise though: first real run returned 7 non-obviously-
+    # noise candidates, of which 2 (a generic org "program" repo, a
+    # wildlife-tracking app with no financial content) turned out on
+    # inspection to not actually be finance-related despite matching the
+    # phrase -- manually removed after checking each repo's real
+    # description/topics via the GitHub API, not just checking for
+    # "specific system vs. generic list" noise. Future runs of this query
+    # should get the same finance-relevance check, not just a noise check.
+    '"biodiversity credit" in:name,description,readme',
 ]
 
 
