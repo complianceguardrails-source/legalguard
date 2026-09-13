@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Modal, ScrollView, Alert } from "react-native";
-import { Search, Plus, X, Database, Cpu, Brain, Network, Wrench, Activity } from "lucide-react-native";
+import { Search, Plus, X, Database, Cpu, Brain, Network, Wrench, Activity, Filter, ChevronDown, ChevronUp } from "lucide-react-native";
 
 import { colors, type, radius } from "../theme";
 import { fetchUseCases, fetchRegulations, submitUseCase } from "../lib/api";
@@ -25,11 +25,32 @@ const MODALITY_OPTIONS = ["structured", "vision", "voice_agentic", "rag_document
 // the jurisdiction picker below.
 const JURISDICTION_OPTIONS = [EU_OPTION, OTHER_OPTION, ...COUNTRIES];
 
+// Real, enumerable value sets for the four classification tags -- see
+// database/migrations/005_add_model_system_taxonomy.sql. Small enough to
+// filter by directly rather than just display, unlike free-text fields.
+const TAG_FILTER_GROUPS = [
+  { key: "model_modality", label: "Model modality", options: ["decoder-only", "encoder-only", "tabular-regressor"] },
+  {
+    key: "system_interface_type",
+    label: "System interface",
+    options: ["rest-api", "rpc-gateway", "websocket-stream"],
+  },
+  { key: "agent_operational_tools", label: "Agent tools", options: ["database-tool", "execution-tool"], isArray: true },
+  {
+    key: "data_interception_state",
+    label: "Interaction pattern",
+    options: ["stateless-payload", "stateful-trace"],
+  },
+];
+
 export default function KnowledgeBaseScreen() {
   const [useCases, setUseCases] = useState([]);
   const [regulations, setRegulations] = useState([]);
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // { [groupKey]: Set of selected option values }
+  const [activeTagFilters, setActiveTagFilters] = useState({});
 
   const load = () => {
     fetchUseCases().then(setUseCases);
@@ -38,16 +59,48 @@ export default function KnowledgeBaseScreen() {
 
   useEffect(load, []);
 
+  const toggleTagFilter = (groupKey, value) => {
+    setActiveTagFilters((prev) => {
+      const current = new Set(prev[groupKey] || []);
+      if (current.has(value)) current.delete(value);
+      else current.add(value);
+      return { ...prev, [groupKey]: current };
+    });
+  };
+
+  const activeTagFilterCount = Object.values(activeTagFilters).reduce((sum, set) => sum + (set?.size || 0), 0);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return useCases;
-    return useCases.filter(
-      (u) =>
-        u.name.toLowerCase().includes(q) ||
-        u.parent_sector?.toLowerCase().includes(q) ||
-        u.modality?.toLowerCase().includes(q)
-    );
-  }, [useCases, query]);
+    let result = useCases;
+    if (q) {
+      result = result.filter(
+        (u) =>
+          u.name.toLowerCase().includes(q) ||
+          u.parent_sector?.toLowerCase().includes(q) ||
+          u.modality?.toLowerCase().includes(q) ||
+          u.model_modality?.toLowerCase().includes(q) ||
+          u.system_interface_type?.toLowerCase().includes(q) ||
+          u.data_interception_state?.toLowerCase().includes(q) ||
+          (u.agent_operational_tools || []).some((t) => t.toLowerCase().includes(q))
+      );
+    }
+    // Faceted filtering: AND across groups (a use case must match every
+    // group with an active selection), OR within a group (any selected
+    // value in that group is enough). agent_operational_tools is an array
+    // field, so "match" means intersecting with the selection, not equality.
+    for (const group of TAG_FILTER_GROUPS) {
+      const selected = activeTagFilters[group.key];
+      if (!selected || selected.size === 0) continue;
+      result = result.filter((u) => {
+        if (group.isArray) {
+          return (u[group.key] || []).some((v) => selected.has(v));
+        }
+        return selected.has(u[group.key]);
+      });
+    }
+    return result;
+  }, [useCases, query, activeTagFilters]);
 
   return (
     <View style={styles.container}>
@@ -60,16 +113,61 @@ export default function KnowledgeBaseScreen() {
           value={query}
           onChangeText={setQuery}
         />
+        <TouchableOpacity style={styles.filterToggle} onPress={() => setFiltersOpen((v) => !v)}>
+          <Filter size={16} color={activeTagFilterCount > 0 ? colors.accent : colors.textMuted} />
+          {activeTagFilterCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeTagFilterCount}</Text>
+            </View>
+          )}
+          {filtersOpen ? (
+            <ChevronUp size={14} color={colors.textMuted} />
+          ) : (
+            <ChevronDown size={14} color={colors.textMuted} />
+          )}
+        </TouchableOpacity>
         <TouchableOpacity style={styles.addButton} onPress={() => setModalOpen(true)}>
           <Plus size={16} color={colors.primary} />
         </TouchableOpacity>
       </View>
+
+      {filtersOpen && (
+        <View style={styles.filterPanel}>
+          {TAG_FILTER_GROUPS.map((group) => (
+            <View key={group.key} style={{ marginBottom: 10 }}>
+              <Text style={styles.filterGroupLabel}>{group.label}</Text>
+              <View style={styles.chipRow}>
+                {group.options.map((opt) => {
+                  const selected = activeTagFilters[group.key]?.has(opt);
+                  return (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[styles.chip, selected && styles.chipSelected]}
+                      onPress={() => toggleTagFilter(group.key, opt)}
+                    >
+                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                        {opt.toUpperCase()}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+          {activeTagFilterCount > 0 && (
+            <TouchableOpacity onPress={() => setActiveTagFilters({})}>
+              <Text style={styles.clearFiltersText}>Clear all filters</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: 20, paddingTop: 12 }}
         renderItem={({ item }) => <UseCaseCard useCase={item} />}
-        ListEmptyComponent={<Text style={styles.emptyText}>No use cases match "{query}".</Text>}
+        ListEmptyComponent={<Text style={styles.emptyText}>No use cases match the current search/filters.</Text>}
       />
 
       <AddUseCaseModal
@@ -431,6 +529,46 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     borderRadius: radius.button,
     padding: 6,
+  },
+  filterToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+  },
+  filterBadge: {
+    backgroundColor: colors.accent,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  filterBadgeText: { fontFamily: type.fontFamilyBold, fontSize: 9, color: colors.primary },
+  filterPanel: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterGroupLabel: {
+    fontFamily: type.fontFamilyMedium,
+    fontSize: 11,
+    color: colors.secondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  clearFiltersText: {
+    fontFamily: type.fontFamilyMedium,
+    fontSize: 12,
+    color: colors.danger,
+    textAlign: "center",
+    marginTop: 4,
   },
   emptyText: { fontFamily: type.fontFamily, color: colors.textMuted, textAlign: "center", marginTop: 40 },
   card: {
