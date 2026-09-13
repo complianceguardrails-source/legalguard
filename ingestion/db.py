@@ -332,6 +332,34 @@ def update_use_case_classification(conn: psycopg.Connection, use_case_id: str, p
         )
 
 
+def fetch_unclassified_risk_tier_use_cases(conn: psycopg.Connection) -> list[dict]:
+    """Use cases still sitting at the risk_tier schema default -- candidates
+    for ingestion/reclassify_risk_tier.py to re-run through an updated
+    risk_tier_classifier.py without touching rows that already have a real
+    tier, whether hand-curated or previously classified successfully."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, name, description FROM banking_use_cases WHERE risk_tier = 'unclassified'"
+        )
+        cols = [d.name for d in cur.description]
+        rows = []
+        for row in cur.fetchall():
+            record = dict(zip(cols, row))
+            for key in ("name", "description"):
+                if isinstance(record.get(key), (bytes, bytearray)):
+                    record[key] = record[key].decode("utf-8")
+            rows.append(record)
+        return rows
+
+
+def update_risk_tier(conn: psycopg.Connection, use_case_id: str, risk_tier: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE banking_use_cases SET risk_tier = %s WHERE id = %s",
+            (risk_tier, use_case_id),
+        )
+
+
 def fetch_regulations_for_trend_analysis(conn: psycopg.Connection) -> list[dict]:
     """Every regulation with enough data to feed a real trend signal (see
     ingestion/generate_horizon_forecasts.py) -- needs both a publication

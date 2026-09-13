@@ -27,6 +27,13 @@ SECTOR_KEYWORDS = {
         "climate finance", "green finance", "nature finance", "sustainable finance",
         "transition finance", "retrofit finance", "esg", "biodiversity risk",
         "green bond", "carbon", "climate risk",
+        # Bare "climate"/"biodiversity" added after finding real HF models
+        # (e.g. "climatebert/distilroberta-base-climate-commitment") whose
+        # name/tags contain the bare word but never the compound phrases
+        # above -- a hyphenated model name doesn't contain the two-word
+        # substring "climate risk" even though it's obviously climate-
+        # related. Same reasoning applies to "biodiversity" alone.
+        "climate", "biodiversity",
     },
     "Consumer Finance": {
         "credit", "loan", "lending", "mortgage", "underwrit", "score", "scoring",
@@ -72,6 +79,13 @@ def _score(text_lower: str, keyword_map: dict[str, set[str]]) -> tuple[str, int]
 def classify_use_case(name: str, description: str, topics: list[str]) -> tuple[str, str]:
     """Returns (parent_sector, modality), both with safe fallbacks."""
     text_lower = " ".join([name, description or "", " ".join(topics or [])]).lower()
+    # Real repo/model names commonly use hyphens or underscores where a
+    # human-written keyword phrase (e.g. "credit scoring") has a space --
+    # "credit-scoring-model" would otherwise never match. Normalizing both
+    # separators to spaces lets every existing multi-word keyword phrase
+    # match hyphenated/underscored names too, without enumerating every
+    # separator variant by hand.
+    text_lower = text_lower.replace("-", " ").replace("_", " ")
 
     sector, sector_score = _score(text_lower, SECTOR_KEYWORDS)
     modality, modality_score = _score(text_lower, MODALITY_KEYWORDS)

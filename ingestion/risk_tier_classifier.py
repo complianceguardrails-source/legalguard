@@ -58,5 +58,8 @@ def classify_risk_tier(name: str, description: str, topics: list[str]) -> str:
     """Returns one of prohibited/high_risk/limited_risk/minimal_risk, or
     'unclassified' (the schema default) when nothing matches."""
     text_lower = " ".join([name, description or "", " ".join(topics or [])]).lower()
+    # Same fix as usecase_classifier.py: "credit-scoring-model" wouldn't
+    # otherwise match the keyword phrase "credit scoring" at all.
+    text_lower = text_lower.replace("-", " ").replace("_", " ")
     label, score = _score(text_lower, RISK_KEYWORDS)
     return label if score > 0 else "unclassified"
