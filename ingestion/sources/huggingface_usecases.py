@@ -49,6 +49,7 @@ DEFAULT_QUERIES = [
     "trading signal",
     "ESG classification",
     "loan default prediction",
+    "ClimateBERT",
 ]
 
 # Real, documented Hugging Face pipeline_tag values
