@@ -20,6 +20,65 @@
 
 import { getThresholdsForSector } from "./guardrailThresholds";
 
+// The real, narrow compilation step this system performs: each entry below
+// is gated on a genuine derived signal (manifest-scanned dependencies or
+// the computed data_interception_state -- see ingestion/sources and
+// db.py::derive_data_interception_state), never guessed. When a use case's
+// evidence matches `appliesTo`, its `requirementId` becomes an additional,
+// independent condition `allow` must satisfy -- combining naturally when a
+// use case matches more than one, since each is just one more ANDed check,
+// not a branch. Nothing here is emitted unless the underlying evidence is
+// real; a use case matching none of these gets exactly the same template
+// as before this compiler existed.
+const COMPILED_REQUIREMENTS = [
+  {
+    requirementId: "execution",
+    appliesTo: (uc) => Array.isArray(uc.agent_operational_tools) && uc.agent_operational_tools.includes("execution-tool"),
+    actionType: "trade_execution",
+    approvalFlag: "execution_approved_by_human",
+    evidenceLabel: "agent_operational_tools:execution-tool",
+    comment:
+      "A real dependency on trade-execution tooling (e.g. ccxt, alpaca-trade-api,\n" +
+      "# ib_insync) was detected for this use case, so a \"trade_execution\" action\n" +
+      "# additionally requires explicit human approval.",
+  },
+  {
+    requirementId: "database",
+    appliesTo: (uc) => Array.isArray(uc.agent_operational_tools) && uc.agent_operational_tools.includes("database-tool"),
+    actionType: "database_query",
+    approvalFlag: "data_access_reviewed",
+    evidenceLabel: "agent_operational_tools:database-tool",
+    comment:
+      "A real dependency on direct database access (e.g. sqlalchemy, psycopg2,\n" +
+      "# redis) was detected for this use case, so a \"database_query\" action\n" +
+      "# additionally requires confirmation the access was reviewed for\n" +
+      "# PII/data-governance handling.",
+  },
+  {
+    requirementId: "rest_api",
+    appliesTo: (uc) => uc.system_interface_type === "rest-api",
+    actionType: "api_request",
+    approvalFlag: "caller_authenticated",
+    evidenceLabel: "system_interface_type:rest-api",
+    comment:
+      "A real REST API dependency (e.g. FastAPI, Flask) was detected for this\n" +
+      "# use case, so an \"api_request\" action additionally requires the caller\n" +
+      "# to be authenticated.",
+  },
+  {
+    requirementId: "stateful_session",
+    appliesTo: (uc) => uc.data_interception_state === "stateful-trace",
+    actionType: "session_continue",
+    approvalFlag: "session_retention_enforced",
+    evidenceLabel: "data_interception_state:stateful-trace",
+    comment:
+      "This use case accumulates conversational/session state (voice, multi-agent,\n" +
+      "# or RAG-document interaction) rather than stateless single-shot payloads,\n" +
+      "# so continuing a session additionally requires confirmation that a\n" +
+      "# data-retention policy is enforced.",
+  },
+];
+
 function regoPackageName(useCaseName) {
   return useCaseName
     .toLowerCase()
@@ -117,46 +176,42 @@ ${regCheckName(r, i)} if {
       : `    input.compliance_checks_passed == true
     input.human_review_confirmed == true`;
 
-  // The one narrow, real compilation step this system performs: when
-  // architecture_enricher.py's manifest scan found a genuine dependency on
-  // trade-execution tooling (ccxt, alpaca-trade-api, ib_insync -- see
-  // ingestion/sources/architecture_enricher.py), a `trade_execution` action
-  // requires an explicit human-approval flag beyond the generic compliance
-  // checks above. This is compiled in only for use cases with real evidence
-  // of execution capability, not emitted unconditionally -- everything else
-  // in this file remains the same conservative template regardless of input.
-  const hasExecutionTool =
-    Array.isArray(useCase.agent_operational_tools) &&
-    useCase.agent_operational_tools.includes("execution-tool");
+  // Which compiled requirements actually apply to this use case, based on
+  // its real derived signals -- never more than what the evidence supports.
+  const applicableRequirements = COMPILED_REQUIREMENTS.filter((req) => req.appliesTo(useCase));
 
-  const executionGuardrailRule = hasExecutionTool
-    ? `
-# --- Execution-tool guardrail (compiled from agent_operational_tools) -----
-# A real dependency on trade-execution tooling was detected for this use
-# case, so a "trade_execution" action additionally requires explicit human
-# approval, on top of the compliance checks above.
-requires_execution_approval if {
-    input.action_type == "trade_execution"
+  const compiledRequirementRules = applicableRequirements
+    .map(
+      (req) => `
+# --- ${req.requirementId} guardrail (compiled from ${req.evidenceLabel}) ---
+# ${req.comment}
+${req.requirementId}_satisfied if {
+    # "not ... ==" rather than "!=": when input.action_type is absent
+    # entirely (the common case -- most inputs don't name an action type
+    # at all), "!=" is undefined in Rego, not true, which would wrongly
+    # make this requirement (and so \`allow\`) fail for every ordinary
+    # input. "not <equality>" correctly treats "absent" the same as "not
+    # this action type" -- found by a real opa test failure, not by
+    # inspection.
+    not input.action_type == "${req.actionType}"
+}
+
+${req.requirementId}_satisfied if {
+    input.action_type == "${req.actionType}"
+    input.${req.approvalFlag} == true
 }
 `
-    : "";
+    )
+    .join("");
 
-  const allowRules = hasExecutionTool
-    ? `
+  // Each applicable requirement is one more ANDed condition on `allow`, not
+  // a branch -- so a use case matching several combines them naturally
+  // (e.g. a trading agent that also exposes a REST API needs both
+  // execution approval AND caller authentication), without the 2^n blowup
+  // a per-signal allow-block split would cause.
+  const allowRules = `
 allow if {
-${allowBody}
-    not requires_execution_approval
-}
-
-allow if {
-${allowBody}
-    requires_execution_approval
-    input.execution_approved_by_human == true
-}
-`
-    : `
-allow if {
-${allowBody}
+${allowBody}${applicableRequirements.map((req) => `\n    ${req.requirementId}_satisfied`).join("")}
 }
 `;
 
@@ -186,7 +241,7 @@ ${perRegulationChecks ? `
 # structural placeholder -- it currently just requires the same two
 # generic input flags as before. Replace each body with the regulation's
 # real condition once your pipeline's input schema is known.
-${perRegulationChecks}` : ""}${executionGuardrailRule}${allowRules}`;
+${perRegulationChecks}` : ""}${compiledRequirementRules}${allowRules}`;
 
   files["policies/rules_test.rego"] = `package legalguard.${pkg}
 
@@ -201,39 +256,39 @@ test_deny_when_checks_missing if {
 test_deny_when_review_missing if {
     not allow with input as {"compliance_checks_passed": true, "human_review_confirmed": false}
 }
-${
-  hasExecutionTool
-    ? `
-# --- Execution-tool guardrail coverage ------------------------------------
-# Real test cases for the compiled execution-approval rule above, not just
+${applicableRequirements
+  .map(
+    (req) => `
+# --- ${req.requirementId} guardrail coverage ---------------------------------
+# Real test cases for the compiled ${req.requirementId} rule above, not just
 # the generic stub checks.
-test_execution_denied_without_human_approval if {
+test_${req.requirementId}_denied_without_approval if {
     not allow with input as {
         "compliance_checks_passed": true,
         "human_review_confirmed": true,
-        "action_type": "trade_execution",
+        "action_type": "${req.actionType}",
     }
 }
 
-test_execution_allowed_with_human_approval if {
+test_${req.requirementId}_allowed_with_approval if {
     allow with input as {
         "compliance_checks_passed": true,
         "human_review_confirmed": true,
-        "action_type": "trade_execution",
-        "execution_approved_by_human": true,
+        "action_type": "${req.actionType}",
+        "${req.approvalFlag}": true,
     }
 }
 
-test_non_execution_action_unaffected_by_execution_guardrail if {
+test_${req.requirementId}_unaffected_by_unrelated_action if {
     allow with input as {
         "compliance_checks_passed": true,
         "human_review_confirmed": true,
-        "action_type": "data_query",
+        "action_type": "unrelated_action",
     }
 }
 `
-    : ""
-}${
+  )
+  .join("")}${
   regulations.length > 0
     ? `
 # --- Per-regulation stub coverage -----------------------------------------
@@ -336,7 +391,7 @@ def guarded(fn):
         // see docs/ARCHITECTURE.md's compiler-gap note. Empty for every
         // use case without that signal, so this stays an honest audit
         // trail rather than a claim made unconditionally.
-        compiled_from_signals: hasExecutionTool ? ["agent_operational_tools:execution-tool"] : [],
+        compiled_from_signals: applicableRequirements.map((req) => req.evidenceLabel),
         indexed_global_regulatory_dependencies: regulations.map((r) => ({
           legal_reference_id: `${r.jurisdiction}-${r.issuing_body}-${r.clause_identifier}`,
           authority: r.issuing_body,
