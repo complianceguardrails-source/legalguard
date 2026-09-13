@@ -77,6 +77,19 @@ const COMPILED_REQUIREMENTS = [
       "# so continuing a session additionally requires confirmation that a\n" +
       "# data-retention policy is enforced.",
   },
+  {
+    requirementId: "generative_disclosure",
+    appliesTo: (uc) => uc.model_modality === "decoder-only",
+    actionType: "generated_content_delivery",
+    approvalFlag: "ai_disclosure_shown",
+    evidenceLabel: "model_modality:decoder-only",
+    comment:
+      "This use case's declared Hugging Face pipeline_tag/library_name identified\n" +
+      "# it as a real decoder-only (text-generation-capable) model, so delivering\n" +
+      "# generated content additionally requires confirmation that an AI-disclosure\n" +
+      "# notice was shown to the recipient -- see the Front Office sector's own\n" +
+      "# ai_disclosure_required threshold above, and EU AI Act Article 50.",
+  },
 ];
 
 function regoPackageName(useCaseName) {
@@ -284,6 +297,40 @@ test_${req.requirementId}_unaffected_by_unrelated_action if {
         "compliance_checks_passed": true,
         "human_review_confirmed": true,
         "action_type": "unrelated_action",
+    }
+}
+
+# --- ${req.requirementId} malformed-input robustness --------------------------
+# Real cases beyond the happy path / missing-flag path above -- not an
+# adversarial or jailbreak evaluation (Section 5's "No evaluation harness"
+# limitation stands), just confirming the compiled rule degrades safely
+# (denies) rather than erroring or, worse, silently allowing, when the
+# input is malformed rather than merely incomplete.
+test_${req.requirementId}_denied_when_approval_flag_wrong_type if {
+    not allow with input as {
+        "compliance_checks_passed": true,
+        "human_review_confirmed": true,
+        "action_type": "${req.actionType}",
+        "${req.approvalFlag}": "true",
+    }
+}
+
+test_${req.requirementId}_denied_when_approval_flag_null if {
+    not allow with input as {
+        "compliance_checks_passed": true,
+        "human_review_confirmed": true,
+        "action_type": "${req.actionType}",
+        "${req.approvalFlag}": null,
+    }
+}
+
+test_${req.requirementId}_unaffected_by_unexpected_extra_field if {
+    allow with input as {
+        "compliance_checks_passed": true,
+        "human_review_confirmed": true,
+        "action_type": "${req.actionType}",
+        "${req.approvalFlag}": true,
+        "unexpected_extra_field": {"nested": ["junk", 1, false]},
     }
 }
 `
