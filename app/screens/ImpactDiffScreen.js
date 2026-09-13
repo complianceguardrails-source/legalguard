@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Linking } from "react-native";
-import { Code2, FolderPlus, RefreshCw, Scale, GitBranchPlus, ExternalLink } from "lucide-react-native";
+import { Code2, FolderPlus, RefreshCw, Scale, GitBranchPlus, ExternalLink, Brain, Network, Wrench, Activity } from "lucide-react-native";
 
 import { colors, type, radius } from "../theme";
 import { fetchRegulations, fetchUseCases, fetchAdminReferenceGuardrails } from "../lib/api";
@@ -213,8 +213,36 @@ export default function ImpactDiffScreen({ route }) {
     // ingestion/register_admin_reference.py) -- entirely separate from
     // existingMapping above, which is THIS device's own generated repo.
     const adminReference = adminReferences[selectedUseCase.id];
+    // Four real classification tags -- see
+    // database/migrations/005_add_model_system_taxonomy.sql for exactly
+    // what each is derived from. Surfaced here (not just the Use Cases
+    // list) because they're directly relevant to an auditor: a use case
+    // with execution-tool access or a stateful-trace interaction pattern
+    // carries a different real risk profile than a stateless-payload one,
+    // independent of what regulations happen to be matched to it.
+    const hasSystemTags =
+      selectedUseCase.model_modality ||
+      selectedUseCase.system_interface_type ||
+      (selectedUseCase.agent_operational_tools || []).length > 0 ||
+      selectedUseCase.data_interception_state;
     return (
       <View style={styles.diffPane}>
+        {hasSystemTags && (
+          <View style={styles.detailPillRow}>
+            {!!selectedUseCase.model_modality && (
+              <MetadataPill label={selectedUseCase.model_modality.toUpperCase()} variant="success" icon={Brain} />
+            )}
+            {!!selectedUseCase.system_interface_type && (
+              <MetadataPill label={selectedUseCase.system_interface_type.toUpperCase()} variant="info" icon={Network} />
+            )}
+            {(selectedUseCase.agent_operational_tools || []).map((tool) => (
+              <MetadataPill key={tool} label={tool.toUpperCase()} variant="warning" icon={Wrench} />
+            ))}
+            {!!selectedUseCase.data_interception_state && (
+              <MetadataPill label={selectedUseCase.data_interception_state.toUpperCase()} variant="neutral" icon={Activity} />
+            )}
+          </View>
+        )}
         <View style={styles.detailPillRow}>
           {existingMapping?.repo ? (
             <MetadataPill label={`${existingMapping.owner}/${existingMapping.repo}`} variant="primary" icon={GitBranchPlus} />
