@@ -15,18 +15,21 @@ being guessed into a tier with no supporting signal.
 """
 from __future__ import annotations
 
+import re
+
 # Dict order doubles as severity priority: _score() below keeps the first
 # tier it finds a strictly-higher hit count for, so a repo tripping both
 # "prohibited" and "high_risk" keywords (e.g. a social-scoring critique
 # that also mentions credit) is classified toward the more serious tier.
-RISK_KEYWORDS = {
+_RISK_KEYWORDS_RAW = {
     "prohibited": {
         "social scoring", "social credit", "subliminal", "manipulative technique",
         "emotion recognition", "biometric categorization", "predictive policing",
         "mass surveillance", "real-time biometric identification",
     },
     "high_risk": {
-        "credit scoring", "creditworthiness", "credit risk model", "underwriting",
+        "credit scoring", "creditworthiness", "credit risk", "credit risk model",
+        "credit card risk", "underwriting",
         "loan approval", "loan decision", "insurance pricing", "insurance underwriting",
         "claims automation", "biometric identification", "biometric verification",
         "kyc", "aml", "anti-money laundering", "sanctions screening",
@@ -45,10 +48,32 @@ RISK_KEYWORDS = {
 }
 
 
+def _normalize_keyword_map(keyword_map: dict[str, set[str]]) -> dict[str, set[str]]:
+    # Same fix as usecase_classifier.py: keywords are written with natural
+    # hyphens (e.g. "robo-advisor"), but classify_risk_tier() normalizes
+    # text_lower's hyphens to spaces before matching, so a hyphenated
+    # keyword literal would silently never match. Found via validation
+    # review: "anti-money laundering", "robo-advisor", and "real-time
+    # biometric identification" had all gone dead this way.
+    return {label: {kw.replace("-", " ") for kw in kws} for label, kws in keyword_map.items()}
+
+
+RISK_KEYWORDS = _normalize_keyword_map(_RISK_KEYWORDS_RAW)
+
+
+def _keyword_matches(kw: str, text_lower: str) -> bool:
+    # Same short-keyword collision risk as usecase_classifier.py -- "aml"
+    # (anti-money-laundering) matched inside "seamless" as a real false
+    # positive found via hand-validation (jpmorganchase/dataquery-sdk).
+    if len(kw) <= 4:
+        return re.search(r"\b" + re.escape(kw) + r"\b", text_lower) is not None
+    return kw in text_lower
+
+
 def _score(text_lower: str, keyword_map: dict[str, set[str]]) -> tuple[str, int]:
     best_label, best_score = None, 0
     for label, keywords in keyword_map.items():
-        hits = sum(1 for kw in keywords if kw in text_lower)
+        hits = sum(1 for kw in keywords if _keyword_matches(kw, text_lower))
         if hits > best_score:
             best_label, best_score = label, hits
     return best_label, best_score

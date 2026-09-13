@@ -386,6 +386,34 @@ def fetch_use_cases_with_awesome_list_provenance(conn: psycopg.Connection) -> li
         return rows
 
 
+def fetch_all_mined_use_cases(conn: psycopg.Connection) -> list[dict]:
+    """Every use case from an automated source (github_mined /
+    huggingface_mined), regardless of its current parent_sector/risk_tier --
+    unlike the fallback-only fetchers, and broader than
+    fetch_use_cases_with_awesome_list_provenance (which only covers one known
+    contamination pattern). A validation pass found that classifier fixes
+    don't retroactively help rows that already hold a plausible-but-stale
+    non-default label from before the fix -- those rows are invisible to
+    every fetcher that only looks at the schema default. Deliberately
+    excludes 'curated' and 'user_submitted' rows: those are human-authored
+    labels, not something a heuristic classifier should ever overwrite. See
+    ingestion/reclassify_all_mined.py."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, name, description, parent_sector, modality, risk_tier FROM banking_use_cases "
+            "WHERE source IN ('github_mined', 'huggingface_mined')"
+        )
+        cols = [d.name for d in cur.description]
+        rows = []
+        for row in cur.fetchall():
+            record = dict(zip(cols, row))
+            for key in ("name", "description", "parent_sector", "modality", "risk_tier"):
+                if isinstance(record.get(key), (bytes, bytearray)):
+                    record[key] = record[key].decode("utf-8")
+            rows.append(record)
+        return rows
+
+
 def fetch_regulations_for_trend_analysis(conn: psycopg.Connection) -> list[dict]:
     """Every regulation with enough data to feed a real trend signal (see
     ingestion/generate_horizon_forecasts.py) -- needs both a publication
