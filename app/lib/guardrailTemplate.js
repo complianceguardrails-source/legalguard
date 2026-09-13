@@ -117,6 +117,49 @@ ${regCheckName(r, i)} if {
       : `    input.compliance_checks_passed == true
     input.human_review_confirmed == true`;
 
+  // The one narrow, real compilation step this system performs: when
+  // architecture_enricher.py's manifest scan found a genuine dependency on
+  // trade-execution tooling (ccxt, alpaca-trade-api, ib_insync -- see
+  // ingestion/sources/architecture_enricher.py), a `trade_execution` action
+  // requires an explicit human-approval flag beyond the generic compliance
+  // checks above. This is compiled in only for use cases with real evidence
+  // of execution capability, not emitted unconditionally -- everything else
+  // in this file remains the same conservative template regardless of input.
+  const hasExecutionTool =
+    Array.isArray(useCase.agent_operational_tools) &&
+    useCase.agent_operational_tools.includes("execution-tool");
+
+  const executionGuardrailRule = hasExecutionTool
+    ? `
+# --- Execution-tool guardrail (compiled from agent_operational_tools) -----
+# A real dependency on trade-execution tooling was detected for this use
+# case, so a "trade_execution" action additionally requires explicit human
+# approval, on top of the compliance checks above.
+requires_execution_approval if {
+    input.action_type == "trade_execution"
+}
+`
+    : "";
+
+  const allowRules = hasExecutionTool
+    ? `
+allow if {
+${allowBody}
+    not requires_execution_approval
+}
+
+allow if {
+${allowBody}
+    requires_execution_approval
+    input.execution_approved_by_human == true
+}
+`
+    : `
+allow if {
+${allowBody}
+}
+`;
+
   files["policies/rules.rego"] = `package legalguard.${pkg}
 
 # Guardrail for: ${useCase.name}
@@ -143,11 +186,7 @@ ${perRegulationChecks ? `
 # structural placeholder -- it currently just requires the same two
 # generic input flags as before. Replace each body with the regulation's
 # real condition once your pipeline's input schema is known.
-${perRegulationChecks}` : ""}
-allow if {
-${allowBody}
-}
-`;
+${perRegulationChecks}` : ""}${executionGuardrailRule}${allowRules}`;
 
   files["policies/rules_test.rego"] = `package legalguard.${pkg}
 
@@ -163,6 +202,38 @@ test_deny_when_review_missing if {
     not allow with input as {"compliance_checks_passed": true, "human_review_confirmed": false}
 }
 ${
+  hasExecutionTool
+    ? `
+# --- Execution-tool guardrail coverage ------------------------------------
+# Real test cases for the compiled execution-approval rule above, not just
+# the generic stub checks.
+test_execution_denied_without_human_approval if {
+    not allow with input as {
+        "compliance_checks_passed": true,
+        "human_review_confirmed": true,
+        "action_type": "trade_execution",
+    }
+}
+
+test_execution_allowed_with_human_approval if {
+    allow with input as {
+        "compliance_checks_passed": true,
+        "human_review_confirmed": true,
+        "action_type": "trade_execution",
+        "execution_approved_by_human": true,
+    }
+}
+
+test_non_execution_action_unaffected_by_execution_guardrail if {
+    allow with input as {
+        "compliance_checks_passed": true,
+        "human_review_confirmed": true,
+        "action_type": "data_query",
+    }
+}
+`
+    : ""
+}${
   regulations.length > 0
     ? `
 # --- Per-regulation stub coverage -----------------------------------------
@@ -260,6 +331,12 @@ def guarded(fn):
         risk_tier: useCase.risk_tier || "unclassified",
         active_semver: "v0.1.0",
         framework: "open_policy_agent",
+        // Which policy rules, if any, were compiled from a real derived
+        // signal on this use case rather than the generic template --
+        // see docs/ARCHITECTURE.md's compiler-gap note. Empty for every
+        // use case without that signal, so this stays an honest audit
+        // trail rather than a claim made unconditionally.
+        compiled_from_signals: hasExecutionTool ? ["agent_operational_tools:execution-tool"] : [],
         indexed_global_regulatory_dependencies: regulations.map((r) => ({
           legal_reference_id: `${r.jurisdiction}-${r.issuing_body}-${r.clause_identifier}`,
           authority: r.issuing_body,

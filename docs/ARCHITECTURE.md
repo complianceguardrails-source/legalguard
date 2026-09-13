@@ -38,7 +38,7 @@ custom backend server holds a user's GitHub credentials.
 | RSS ingestion | Real, but feed URLs need verifying against live regulator sites |
 | Dedup cache | Real (`ingestion_cache` table, sha256 content hash) |
 | Blast-radius tagger | Real keyword/Jaccard matcher; `tag_regulation_llm()` is a documented stub for a future semantic upgrade |
-| Neuro-symbolic Rego compiler (E, C from the design doc) | **Not implemented.** `draftRegoStub()` in `ImpactDiffScreen.js` is a deterministic template, not a legal-text-to-code compiler. Treat every generated policy as a draft a human must review before merging. |
+| Neuro-symbolic Rego compiler (E, C from the design doc) | **Mostly not implemented, one narrow real exception.** `buildGuardrailTemplate()` (`guardrailTemplate.js`) is a deterministic template for the vast majority of use cases -- not a legal-text-to-code compiler, still a draft a human must review before merging. The one real compilation step: when `agent_operational_tools` (a genuine manifest-scanned signal, see the miner row below) contains `execution-tool`, the generated policy gets an additional, differentiated rule requiring explicit human approval before a `trade_execution` action, with its own real `opa test` coverage -- not emitted for use cases without that evidence. As of this writing that's 13 of 642 use cases (2.0%). Still not a general extraction+compilation pipeline; see the extension-points list below. |
 | GitHub GitOps client | Real, working REST calls (branch, commit, PR, create-repo). New-repo initialization uses the Git Data API (blobs/tree/commit) so all ~8 template files land in one atomic commit, not a partial multi-step push |
 | Guardrail repo naming (`guardrailNaming.js`) | Real, deterministic `guardrail-{sector}-{usecase}` slug, so the same use case always maps to the same repo name |
 | Guardrail repo template (`guardrailTemplate.js`) | Real, runnable file set: `policies/rules.rego` + `rules_test.rego` (passes `opa test`), `middleware/safety_hook.py` (shells out to `opa eval`), `metadata.json`, `REGULATORY_PROVENANCE.md`, `.github/workflows/compliance_eval.yml`. Policy logic itself is still a conservative default-deny stub -- see the compiler row below |
@@ -79,10 +79,13 @@ ingested history for the trend to mean anything.
 
 ## Extension points, in priority order
 
-1. **Real compiler**: replace `draftRegoStub()` with an actual LLM-backed
-   extraction+compilation pipeline (the `E`/`C` functions from your ICLR
-   draft). This is the single highest-leverage next step -- everything else
-   in this repo is plumbing built to receive that compiler's output.
+1. **Real compiler**: generalize `buildGuardrailTemplate()`'s one narrow
+   compiled rule (execution-tool -> human-approval gate) into an actual
+   LLM-backed extraction+compilation pipeline (the `E`/`C` functions from
+   your ICLR draft) that reads a use case's own code/model card and derives
+   custom rules from it. This is the single highest-leverage next step --
+   everything else in this repo is plumbing built to receive that
+   compiler's output.
 2. **`tag_regulation_llm()`**: swap keyword tagging for real semantic
    matching once you're ready to spend on API calls.
 3. **Push notifications**: wire Expo push notifications so the "double
