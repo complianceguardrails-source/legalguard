@@ -17,3 +17,7 @@ __pycache__/
 # and docs/POSTGREST.md).
 postgrest.local.conf
 postgrest.neon.conf
+
+# Academic paper drafts -- kept out of the public repo deliberately, so
+# this GitHub identity never links back to the (anonymous) submission.
+paper/
