@@ -360,6 +360,32 @@ def update_risk_tier(conn: psycopg.Connection, use_case_id: str, risk_tier: str)
         )
 
 
+def fetch_use_cases_with_awesome_list_provenance(conn: psycopg.Connection) -> list[dict]:
+    """Every use case whose description carries the "(curated in owner/repo's
+    awesome-list)" provenance suffix -- regardless of its current
+    parent_sector/risk_tier, unlike fetch_uncategorized_use_cases /
+    fetch_unclassified_risk_tier_use_cases, which only look at rows still at
+    the fallback default. Needed because this suffix's owner/repo name can
+    spuriously match a real keyword (e.g. "trading" in
+    "awesome-systematic-trading", "backtest" in "paperswithbacktest"),
+    producing a wrong but non-default label that those two fetchers would
+    never revisit -- see ingestion/fix_awesome_list_contamination.py."""
+    with conn.cursor() as cur:
+        cur.execute(
+            r"SELECT id, name, description, parent_sector, risk_tier FROM banking_use_cases "
+            r"WHERE description ~ '\(curated in [^)]+''s awesome-list\)$'"
+        )
+        cols = [d.name for d in cur.description]
+        rows = []
+        for row in cur.fetchall():
+            record = dict(zip(cols, row))
+            for key in ("name", "description", "parent_sector", "risk_tier"):
+                if isinstance(record.get(key), (bytes, bytearray)):
+                    record[key] = record[key].decode("utf-8")
+            rows.append(record)
+        return rows
+
+
 def fetch_regulations_for_trend_analysis(conn: psycopg.Connection) -> list[dict]:
     """Every regulation with enough data to feed a real trend signal (see
     ingestion/generate_horizon_forecasts.py) -- needs both a publication
