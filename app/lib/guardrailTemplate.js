@@ -132,6 +132,45 @@ function assertRegulationProvenance(regulations) {
   }
 }
 
+const SLUG_RE = /^[a-z][a-z0-9_]*$/;
+
+/**
+ * Converts a validated LLM extraction (ingestion/llm_compiler.py --
+ * real evidence, arbitrary text, not a fixed keyword/field list) into the
+ * same COMPILED_REQUIREMENTS shape as the five hand-written entries above,
+ * so it compiles through the identical, already opa-test-verified Rego
+ * template rather than letting an LLM author policy-engine code directly.
+ *
+ * Re-validates independently of ingestion/llm_compiler.py's own
+ * validate_extraction() -- this function must never trust that upstream
+ * check ran, matching assertRegulationProvenance()'s same principle just
+ * above: a caller bug (or a future different extraction path) must not be
+ * able to push an ungrounded requirement into a real generated policy.
+ * Returns null (never throws) for an invalid extraction, since a missing
+ * or bad LLM extraction should silently fall back to the deterministic
+ * template, not break guardrail generation for the whole use case.
+ */
+export function llmRequirementFromExtraction(extraction, evidenceText) {
+  if (!extraction || typeof extraction !== "object") return null;
+  const { requirement_id, action_type, approval_flag, evidence_quote } = extraction;
+  if (![requirement_id, action_type, approval_flag, evidence_quote].every((v) => typeof v === "string" && v.length > 0)) {
+    return null;
+  }
+  if (![requirement_id, action_type, approval_flag].every((v) => SLUG_RE.test(v))) return null;
+  if (typeof evidenceText !== "string" || !evidenceText.includes(evidence_quote)) return null;
+
+  return {
+    requirementId: requirement_id,
+    appliesTo: () => true, // already gated by the caller passing this extraction in at all
+    actionType: action_type,
+    approvalFlag: approval_flag,
+    evidenceLabel: `llm_extraction:${requirement_id}`,
+    comment:
+      `A real compliance-relevant obligation was extracted from this use case's own\n` +
+      `# README by an LLM, grounded in a verbatim quote (not guessed): "${evidence_quote.slice(0, 140)}${evidence_quote.length > 140 ? "..." : ""}"`,
+  };
+}
+
 /**
  * @param {object} useCase - { name, parent_sector, modality, risk_tier }
  * @param {Array<object>} regulations - [{ jurisdiction, issuing_body, clause_identifier, official_title, source_url, mandate_summary }]
@@ -191,7 +230,37 @@ ${regCheckName(r, i)} if {
 
   // Which compiled requirements actually apply to this use case, based on
   // its real derived signals -- never more than what the evidence supports.
-  const applicableRequirements = COMPILED_REQUIREMENTS.filter((req) => req.appliesTo(useCase));
+  // A validated LLM extraction (useCase.llm_compiled_requirement /
+  // llm_evidence_text, from ingestion/llm_compiler.py) is appended the same
+  // way, re-validated here rather than trusted -- see
+  // llmRequirementFromExtraction()'s own docstring for why.
+  const llmRequirement = useCase.llm_compiled_requirement
+    ? llmRequirementFromExtraction(useCase.llm_compiled_requirement, useCase.llm_evidence_text)
+    : null;
+  const applicableRequirements = [
+    ...COMPILED_REQUIREMENTS.filter((req) => req.appliesTo(useCase)),
+    ...(llmRequirement ? [llmRequirement] : []),
+  ];
+
+  // Shared once per package, not per requirement: a systematic adversarial
+  // harness found that comparing input.action_type with plain "==" made
+  // EVERY compiled rule trivially bypassable by any caller sending a
+  // case-flipped, whitespace-padded, or zero-width-space-suffixed variant
+  // of the expected action type -- 48/48 such variants incorrectly reached
+  // allow=true across every rule and use case tested. Normalizing before
+  // comparison (lowercase, trimmed, invisible Unicode formatting
+  // characters stripped) closes that: a non-string input.action_type
+  // (absent, null, boolean, numeric) still makes this whole expression
+  // undefined, which "not <equality>" against it still correctly treats
+  // as "not this action type" -- the same safe degradation as before.
+  const actionTypeNormalization =
+    applicableRequirements.length > 0
+      ? `
+# Normalized once, referenced by every compiled rule below -- see the
+# adversarial-harness finding in the comment above this block.
+_normalized_action_type := regex.replace(lower(trim_space(input.action_type)), "[\\u200b\\u200c\\u200d\\ufeff]", "")
+`
+      : "";
 
   const compiledRequirementRules = applicableRequirements
     .map(
@@ -206,11 +275,11 @@ ${req.requirementId}_satisfied if {
     # input. "not <equality>" correctly treats "absent" the same as "not
     # this action type" -- found by a real opa test failure, not by
     # inspection.
-    not input.action_type == "${req.actionType}"
+    not _normalized_action_type == "${req.actionType}"
 }
 
 ${req.requirementId}_satisfied if {
-    input.action_type == "${req.actionType}"
+    _normalized_action_type == "${req.actionType}"
     input.${req.approvalFlag} == true
 }
 `
@@ -254,7 +323,7 @@ ${perRegulationChecks ? `
 # structural placeholder -- it currently just requires the same two
 # generic input flags as before. Replace each body with the regulation's
 # real condition once your pipeline's input schema is known.
-${perRegulationChecks}` : ""}${compiledRequirementRules}${allowRules}`;
+${perRegulationChecks}` : ""}${actionTypeNormalization}${compiledRequirementRules}${allowRules}`;
 
   files["policies/rules_test.rego"] = `package legalguard.${pkg}
 

@@ -46,6 +46,13 @@ CREATE TABLE banking_use_cases (
     agent_operational_tools TEXT[],
     data_interception_state VARCHAR(30)
         CHECK (data_interception_state IN ('stateless-payload', 'stateful-trace')),
+    -- Real, general-purpose LLM extraction from a use case's own README,
+    -- grounded in a verbatim evidence quote -- NULL means either nothing
+    -- found or a rejected/ungrounded extraction, never an unvalidated
+    -- guess. See database/migrations/006_add_llm_compiled_requirement.sql
+    -- and ingestion/llm_compiler.py.
+    llm_compiled_requirement JSONB,
+    llm_evidence_text        TEXT,
     created_at          TIMESTAMPTZ DEFAULT now(),
     updated_at          TIMESTAMPTZ DEFAULT now(),
     UNIQUE (name)

@@ -581,3 +581,45 @@ def register_admin_reference_guardrail(
             ),
         )
         return str(use_case_id)
+
+
+def fetch_use_cases_needing_llm_extraction(conn: psycopg.Connection, limit: int = 25) -> list[dict]:
+    """GitHub-mined use cases with a real repo URL that haven't had
+    ingestion/llm_compiler.py's extraction attempted yet (llm_evidence_text
+    IS NULL is the "attempted" marker, set regardless of whether a
+    requirement was actually found -- see store_llm_extraction). Scoped to
+    github_mined only: llm_compiler.py fetches a GitHub README, and this
+    fetcher has no equivalent evidence source for HF-mined/curated rows yet."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, name, github_reference_url FROM banking_use_cases "
+            "WHERE source = 'github_mined' AND github_reference_url IS NOT NULL "
+            "AND llm_evidence_text IS NULL "
+            "ORDER BY random() LIMIT %s",
+            (limit,),
+        )
+        cols = [d.name for d in cur.description]
+        rows = []
+        for row in cur.fetchall():
+            record = dict(zip(cols, row))
+            for key in ("name", "github_reference_url"):
+                if isinstance(record.get(key), (bytes, bytearray)):
+                    record[key] = record[key].decode("utf-8")
+            rows.append(record)
+        return rows
+
+
+def store_llm_extraction(conn: psycopg.Connection, use_case_id: str, extraction: Optional[dict], evidence_text: str) -> None:
+    """Records the outcome of an extraction attempt. evidence_text is
+    always stored (even when extraction is None) so llm_evidence_text IS
+    NULL reliably means "not yet attempted", never "attempted and found
+    nothing" -- those two states must stay distinguishable so this
+    function's own caller (fetch_use_cases_needing_llm_extraction) never
+    re-attempts a use case for free every run."""
+    import json as _json
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE banking_use_cases SET llm_compiled_requirement = %s, llm_evidence_text = %s WHERE id = %s",
+            (_json.dumps(extraction) if extraction else None, evidence_text, use_case_id),
+        )
