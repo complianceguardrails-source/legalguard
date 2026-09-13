@@ -18,8 +18,10 @@ correct reflection of missing evidence, not a bug to "fix" by guessing.
 Queries below were each tested in isolation for precision before being
 kept. Dropped: "financial risk" (surfaced AI-safety-research fine-tunes
 about giving risky financial advice -- adjacent research artifacts, not
-production use cases, not what this taxonomy is for) and "financial named
-entity recognition" (zero results).
+production use cases, not what this taxonomy is for), "financial named
+entity recognition" (zero results), and in a later expansion pass --
+"insurance claim classification", "money laundering detection", and
+"algorithmic trading model" (all zero results).
 
 This is a discovery aid, not a technical audit -- every result should be
 treated as an unverified candidate for a human to confirm, same as
@@ -50,6 +52,16 @@ DEFAULT_QUERIES = [
     "ESG classification",
     "loan default prediction",
     "ClimateBERT",
+    "portfolio optimization",
+    "earnings call sentiment",
+    "credit risk",
+    "insurance underwriting",
+    "insurance fraud",
+    "stock price prediction",
+    "bankruptcy prediction",
+    "financial question answering",
+    "KYC verification",
+    "anti money laundering",
 ]
 
 # Real, documented Hugging Face pipeline_tag values
