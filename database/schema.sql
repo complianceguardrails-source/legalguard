@@ -27,13 +27,25 @@ CREATE TABLE banking_use_cases (
     risk_tier            VARCHAR(30) DEFAULT 'unclassified'
         CHECK (risk_tier IN ('unclassified', 'prohibited', 'high_risk', 'limited_risk', 'minimal_risk')),
     source                VARCHAR(30) NOT NULL DEFAULT 'curated'
-        CHECK (source IN ('curated', 'github_mined', 'user_submitted')),
+        CHECK (source IN ('curated', 'github_mined', 'user_submitted', 'huggingface_mined')),
     submitted_by_github_username VARCHAR(150), -- set when source = 'user_submitted'
     -- Self-reported coarse country/region codes (US, EU, UK, OTHER) --
     -- biases the client-side match preview toward relevant jurisdictions,
     -- not a certified determination. See
     -- database/migrations/004_add_operating_jurisdictions.sql.
     operating_jurisdictions TEXT[],
+    -- Four real classification dimensions, each backed by genuine,
+    -- checkable evidence -- NULL means "no real evidence found", never a
+    -- guessed default. See database/migrations/005_add_model_system_taxonomy.sql
+    -- for exactly what each is derived from.
+    hf_model_id           TEXT,                -- Hugging Face Hub model id, HF-mined rows only
+    model_modality        VARCHAR(30)
+        CHECK (model_modality IN ('decoder-only', 'encoder-only', 'tabular-regressor')),
+    system_interface_type VARCHAR(30)
+        CHECK (system_interface_type IN ('rest-api', 'rpc-gateway', 'websocket-stream')),
+    agent_operational_tools TEXT[],
+    data_interception_state VARCHAR(30)
+        CHECK (data_interception_state IN ('stateless-payload', 'stateful-trace')),
     created_at          TIMESTAMPTZ DEFAULT now(),
     updated_at          TIMESTAMPTZ DEFAULT now(),
     UNIQUE (name)
@@ -48,6 +60,10 @@ CREATE INDEX idx_use_cases_source   ON banking_use_cases(source);
 -- link) are unconstrained since a partial index only covers non-null values.
 CREATE UNIQUE INDEX idx_use_cases_github_url ON banking_use_cases(github_reference_url)
     WHERE github_reference_url IS NOT NULL;
+
+-- Same partial-unique pattern for HF-mined rows' own dedup key.
+CREATE UNIQUE INDEX idx_use_cases_hf_model_id ON banking_use_cases(hf_model_id)
+    WHERE hf_model_id IS NOT NULL;
 
 -- ---------------------------------------------------------------------------
 -- 2. Individual regulations / statutory clauses -- one row per distinct clause

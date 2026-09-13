@@ -1,11 +1,21 @@
 name: Weekly Use-Case Discovery
 
-# Mines GitHub for open-source financial-AI repos across the full tier
-# taxonomy (consumer lending, mortgages, green finance, front-office voice
-# agents, CIB, AML/KYC, etc.) and adds new ones to banking_use_cases.
-# Runs weekly, not nightly like ingest.yml -- new repos in this space don't
+# Mines GitHub (+ Hugging Face, since sources/huggingface_usecases.py was
+# added) for open financial-AI repos/models across the full tier taxonomy
+# (consumer lending, mortgages, green finance, front-office voice agents,
+# CIB, AML/KYC, etc.) and adds new ones to banking_use_cases. Runs weekly,
+# not nightly like ingest.yml -- new repos/models in this space don't
 # appear anywhere near as often as regulatory text changes, and the GitHub
 # Search API's rate limit makes running this more often wasteful.
+#
+# Enrichment runs after mining, same chained-steps pattern as ingest.yml's
+# main.py -> generate_horizon_forecasts.py, so newly-discovered repos get
+# their architecture_signal/system_interface_type/agent_operational_tools
+# backfilled the same week they're found rather than sitting NULL until
+# someone remembers to run the backfill scripts by hand. Both enrichment
+# scripts only fetch rows still missing a signal, so after the initial
+# historical backfill this is a small incremental cost most weeks, not a
+# full re-scan.
 
 on:
   schedule:
@@ -15,7 +25,7 @@ on:
 jobs:
   mine:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -36,3 +46,17 @@ jobs:
           # API rate limit from 10/min to 30/min -- no extra secret needed.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python mine_use_cases.py
+
+      - name: Backfill architecture_signal for newly-mined repos
+        working-directory: ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python enrich_architecture.py
+
+      - name: Backfill system_interface_type / agent_operational_tools for newly-mined repos
+        working-directory: ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python enrich_system_signals.py

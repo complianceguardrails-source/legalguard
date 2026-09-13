@@ -18,17 +18,22 @@ import sys
 import db
 from sources.github_usecases import mine_use_cases
 from sources.bank_org_use_cases import mine_bank_use_cases
+from sources.huggingface_usecases import mine_hf_use_cases
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("legalguard.mine_use_cases")
 
 
 def run() -> None:
-    # Two complementary strategies: broad keyword search across all of
-    # GitHub (finds independent/community projects), and a direct pull from
+    # Three complementary strategies: broad keyword search across all of
+    # GitHub (finds independent/community projects), a direct pull from
     # verified top-30-global-bank GitHub orgs (finds what the banks
-    # themselves have actually published). Deduped by repo URL in case a
-    # bank-org repo also happens to match a keyword query.
+    # themselves have actually published), and a search of the Hugging
+    # Face Hub for real financial-AI models. GitHub/bank candidates are
+    # deduped by repo URL in case a bank-org repo also matches a keyword
+    # query; HF candidates live in a separate key space (hf_model_id, not
+    # github_reference_url) so they never collide with the other two --
+    # mine_hf_use_cases() already dedupes within itself.
     candidates = mine_use_cases()
     bank_candidates = mine_bank_use_cases()
     seen_urls = {c["github_reference_url"] for c in candidates}
@@ -36,6 +41,9 @@ def run() -> None:
         if c["github_reference_url"] not in seen_urls:
             candidates.append(c)
             seen_urls.add(c["github_reference_url"])
+
+    hf_candidates = mine_hf_use_cases()
+    candidates.extend(hf_candidates)
 
     if not candidates:
         logger.warning("No candidate use cases found this run.")
@@ -51,17 +59,22 @@ def run() -> None:
                 parent_sector=candidate["parent_sector"],
                 modality=candidate["modality"],
                 description=candidate["description"],
-                github_reference_url=candidate["github_reference_url"],
+                github_reference_url=candidate.get("github_reference_url"),
                 risk_tier=candidate.get("risk_tier"),
+                hf_model_id=candidate.get("hf_model_id"),
+                model_modality=candidate.get("model_modality"),
             )
             if use_case_id:
                 inserted += 1
+                popularity = candidate.get("stars", candidate.get("likes", 0))
+                popularity_label = "stars" if "stars" in candidate else "likes"
                 logger.info(
-                    "Added use case: %s (%s / %s, %d stars) via query \"%s\"",
+                    "Added use case: %s (%s / %s, %d %s) via query \"%s\"",
                     candidate["name"],
                     candidate["parent_sector"],
                     candidate["modality"],
-                    candidate["stars"],
+                    popularity,
+                    popularity_label,
                     candidate["matched_query"],
                 )
             else:

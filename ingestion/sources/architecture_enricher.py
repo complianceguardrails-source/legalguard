@@ -114,3 +114,82 @@ def fetch_architecture_signal(owner: str, repo: str) -> str | None:
     resp.raise_for_status()
     data = resp.json()
     return derive_architecture_signal(data.get("language"), data.get("topics", []))
+
+
+CONTENTS_URL = "https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+MANIFEST_FILES = ["requirements.txt", "pyproject.toml", "package.json"]
+
+# Each entry: a real dependency-name substring that would appear in a real
+# manifest file, matched against actual file content -- never guessed from
+# the repo's name/description the way a topic-based signal might be.
+_INTERFACE_DEPS = [
+    ("fastapi", "rest-api"),
+    ("flask", "rest-api"),
+    ("django", "rest-api"),
+    ("express", "rest-api"),
+    ("koa", "rest-api"),
+    ("grpcio", "rpc-gateway"),
+    ("grpc", "rpc-gateway"),
+    ("websockets", "websocket-stream"),
+    ("socket.io", "websocket-stream"),
+    ("python-socketio", "websocket-stream"),
+]
+_TOOL_DEPS = [
+    ("sqlalchemy", "database-tool"),
+    ("psycopg2", "database-tool"),
+    ("psycopg", "database-tool"),
+    ("pymongo", "database-tool"),
+    ("redis", "database-tool"),
+    ("chromadb", "database-tool"),
+    ("pinecone-client", "database-tool"),
+    ("qdrant-client", "database-tool"),
+    ("faiss", "database-tool"),
+    ("ccxt", "execution-tool"),
+    ("alpaca-trade-api", "execution-tool"),
+    ("ib_insync", "execution-tool"),
+]
+
+
+def _fetch_manifest_text(owner: str, repo: str, path: str) -> str | None:
+    """Returns the real, decoded text content of a single file, or None if
+    it doesn't exist (404) or isn't a plain file. Raises RateLimited the
+    same way fetch_architecture_signal does."""
+    import base64
+
+    resp = requests.get(CONTENTS_URL.format(owner=owner, repo=repo, path=path), headers=_headers(), timeout=20)
+    if resp.status_code == 404:
+        return None
+    if resp.status_code == 403 and "rate limit" in resp.text.lower():
+        raise RateLimited(f"Rate-limited fetching {owner}/{repo}/{path}")
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get("encoding") != "base64" or not data.get("content"):
+        return None
+    return base64.b64decode(data["content"]).decode("utf-8", errors="ignore")
+
+
+def derive_system_signals(manifest_text: str) -> tuple[str | None, list[str]]:
+    lower_text = manifest_text.lower()
+    system_interface_type = None
+    for needle, label in _INTERFACE_DEPS:
+        if needle in lower_text:
+            system_interface_type = label
+            break
+    tools = []
+    for needle, label in _TOOL_DEPS:
+        if needle in lower_text and label not in tools:
+            tools.append(label)
+    return system_interface_type, tools
+
+
+def fetch_manifest_signals(owner: str, repo: str) -> tuple[str | None, list[str]]:
+    """Tries each real manifest file in turn (a repo only has some subset of
+    these; 404 on one just means try the next). Returns (None, []) if none
+    of them exist or nothing recognized matched -- never a guess. Stops at
+    the first manifest file found, matching a repo's actual primary
+    language rather than merging signals across an unrelated stray file."""
+    for path in MANIFEST_FILES:
+        text = _fetch_manifest_text(owner, repo, path)
+        if text is not None:
+            return derive_system_signals(text)
+    return None, []

@@ -140,6 +140,23 @@ def delete_regulations_by_source(conn: psycopg.Connection, ingestion_source: str
         return cur.rowcount
 
 
+_STATEFUL_MODALITIES = {"voice_agentic", "multi_agent", "rag_document"}
+_STATELESS_MODALITIES = {"structured", "vision"}
+
+
+def derive_data_interception_state(modality: str) -> Optional[str]:
+    """Pure derivation from an existing, already-classified modality value --
+    no external lookup needed. voice_agentic/multi_agent/rag_document are
+    inherently multi-turn interactions; structured/vision are inherently
+    single-shot input->output tasks. Returns None for any modality value
+    outside the known five (never guessed)."""
+    if modality in _STATEFUL_MODALITIES:
+        return "stateful-trace"
+    if modality in _STATELESS_MODALITIES:
+        return "stateless-payload"
+    return None
+
+
 def upsert_mined_use_case(
     conn: psycopg.Connection,
     *,
@@ -147,27 +164,40 @@ def upsert_mined_use_case(
     parent_sector: str,
     modality: str,
     description: Optional[str],
-    github_reference_url: str,
+    github_reference_url: Optional[str] = None,
     risk_tier: Optional[str] = None,
+    hf_model_id: Optional[str] = None,
+    model_modality: Optional[str] = None,
 ) -> Optional[str]:
-    """Inserts a GitHub-mined use case. Skips silently (returns None) if it
-    collides with an existing row on either the name or github_reference_url
-    unique constraints -- ON CONFLICT DO NOTHING with no target applies to
-    any unique/exclusion violation, which is what we want here since a
-    curated seed row and a mined row can legitimately describe the same
-    use case under a different name. risk_tier defaults to None so the
-    column's own 'unclassified' default applies when a caller doesn't run
-    the risk-tier classifier."""
+    """Inserts a mined use case, from either GitHub (github_reference_url
+    set, source='github_mined' -- the original/default behavior) or
+    Hugging Face (hf_model_id set, source='huggingface_mined',
+    model_modality carrying the real pipeline_tag-derived classification).
+    Skips silently (returns None) if it collides with an existing row on
+    the name/github_reference_url/hf_model_id unique constraints -- ON
+    CONFLICT DO NOTHING with no target applies to any unique/exclusion
+    violation, which is what we want here since a curated seed row and a
+    mined row can legitimately describe the same use case under a
+    different name. risk_tier defaults to None so the column's own
+    'unclassified' default applies when a caller doesn't run the
+    risk-tier classifier. data_interception_state is always derived here
+    from modality, regardless of which mining source calls this -- a
+    single source of truth rather than duplicating the mapping in every
+    source module."""
+    source = "huggingface_mined" if hf_model_id else "github_mined"
+    data_interception_state = derive_data_interception_state(modality)
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO banking_use_cases
-                (name, parent_sector, modality, description, github_reference_url, risk_tier, source)
-            VALUES (%s, %s, %s, %s, %s, COALESCE(%s, 'unclassified'), 'github_mined')
+                (name, parent_sector, modality, description, github_reference_url,
+                 risk_tier, source, hf_model_id, model_modality, data_interception_state)
+            VALUES (%s, %s, %s, %s, %s, COALESCE(%s, 'unclassified'), %s, %s, %s, %s)
             ON CONFLICT DO NOTHING
             RETURNING id
             """,
-            (name, parent_sector, modality, description, github_reference_url, risk_tier),
+            (name, parent_sector, modality, description, github_reference_url,
+             risk_tier, source, hf_model_id, model_modality, data_interception_state),
         )
         row = cur.fetchone()
         return str(row[0]) if row else None
@@ -221,6 +251,58 @@ def set_architecture_signal(conn: psycopg.Connection, use_case_id: str, architec
             "UPDATE banking_use_cases SET architecture_signal = %s WHERE id = %s",
             (architecture_signal, use_case_id),
         )
+
+
+def set_model_modality(conn: psycopg.Connection, use_case_id: str, model_modality: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE banking_use_cases SET model_modality = %s WHERE id = %s",
+            (model_modality, use_case_id),
+        )
+
+
+def set_system_interface_type(conn: psycopg.Connection, use_case_id: str, system_interface_type: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE banking_use_cases SET system_interface_type = %s WHERE id = %s",
+            (system_interface_type, use_case_id),
+        )
+
+
+def set_agent_operational_tools(conn: psycopg.Connection, use_case_id: str, tools: list[str]) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE banking_use_cases SET agent_operational_tools = %s WHERE id = %s",
+            (tools, use_case_id),
+        )
+
+
+def fetch_use_cases_missing_system_signals(conn: psycopg.Connection) -> list[dict]:
+    """GitHub-sourced use cases with no system_interface_type/
+    agent_operational_tools backfilled yet -- see
+    ingestion/enrich_system_signals.py. Only one of the two needs to be
+    missing to qualify, since a repo might legitimately have real evidence
+    for one dimension but not the other (e.g. a manifest naming fastapi
+    but no recognized DB/execution-tool dependency)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, name, github_reference_url
+            FROM banking_use_cases
+            WHERE github_reference_url IS NOT NULL
+              AND (system_interface_type IS NULL OR agent_operational_tools IS NULL)
+            ORDER BY name
+            """
+        )
+        cols = [d.name for d in cur.description]
+        rows = []
+        for row in cur.fetchall():
+            record = dict(zip(cols, row))
+            for key in ("name", "github_reference_url"):
+                if isinstance(record.get(key), (bytes, bytearray)):
+                    record[key] = record[key].decode("utf-8")
+            rows.append(record)
+        return rows
 
 
 def fetch_uncategorized_use_cases(conn: psycopg.Connection) -> list[dict]:
