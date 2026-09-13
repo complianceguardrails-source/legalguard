@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Modal, ScrollView, Alert } from "react-native";
-import { Search, Plus, X, Database, Cpu } from "lucide-react-native";
+import { Search, Plus, X, Database, Cpu, Brain, Network, Wrench, Activity } from "lucide-react-native";
 
 import { colors, type, radius } from "../theme";
 import { fetchUseCases, fetchRegulations, submitUseCase } from "../lib/api";
@@ -389,6 +389,22 @@ function UseCaseCard({ useCase }) {
             there's no linked repo or nothing usable was found there. */}
         {!!useCase.architecture_signal && (
           <MetadataPill label={useCase.architecture_signal.toUpperCase()} variant="primary" icon={Cpu} />
+        )}
+        {/* Four real classification tags, each backed by genuine, checkable
+            evidence -- see database/migrations/005_add_model_system_taxonomy.sql
+            for exactly what each is derived from. Omitted, not guessed,
+            when there's no real evidence for that use case. */}
+        {!!useCase.model_modality && (
+          <MetadataPill label={useCase.model_modality.toUpperCase()} variant="success" icon={Brain} />
+        )}
+        {!!useCase.system_interface_type && (
+          <MetadataPill label={useCase.system_interface_type.toUpperCase()} variant="info" icon={Network} />
+        )}
+        {(useCase.agent_operational_tools || []).map((tool) => (
+          <MetadataPill key={tool} label={tool.toUpperCase()} variant="warning" icon={Wrench} />
+        ))}
+        {!!useCase.data_interception_state && (
+          <MetadataPill label={useCase.data_interception_state.toUpperCase()} variant="neutral" icon={Activity} />
         )}
       </View>
     </View>

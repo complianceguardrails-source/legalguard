@@ -11,6 +11,9 @@ export const MOCK_USE_CASES = [
     modality: "voice_agentic",
     risk_tier: "high_risk",
     github_reference_url: null,
+    system_interface_type: "websocket-stream",
+    agent_operational_tools: ["database-tool"],
+    data_interception_state: "stateful-trace",
   },
   {
     id: "uc-2",
@@ -19,6 +22,10 @@ export const MOCK_USE_CASES = [
     modality: "vision",
     risk_tier: "high_risk",
     github_reference_url: null,
+    model_modality: "encoder-only",
+    system_interface_type: "rest-api",
+    agent_operational_tools: ["database-tool", "execution-tool"],
+    data_interception_state: "stateless-payload",
   },
   {
     id: "uc-3",
