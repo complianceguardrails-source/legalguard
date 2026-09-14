@@ -134,6 +134,27 @@ function assertRegulationProvenance(regulations) {
 
 const SLUG_RE = /^[a-z][a-z0-9_]*$/;
 
+const PUNCT_NORMALIZE = [
+  [/[‘’]/g, "'"],
+  [/[“”]/g, '"'],
+  [/[–—]/g, "-"],
+  [/…/g, "..."],
+  [/ /g, " "],
+];
+
+/**
+ * Must stay behaviourally identical to ingestion/llm_compiler.py's
+ * normalize_for_match(). The two grounding checks are deliberately
+ * independent implementations either side of a process boundary, so they can
+ * catch each other's bugs -- but they have to agree on what "grounded" means,
+ * or an extraction accepted upstream gets silently dropped here.
+ */
+function normalizeForMatch(text) {
+  let out = text;
+  for (const [pattern, replacement] of PUNCT_NORMALIZE) out = out.replace(pattern, replacement);
+  return out.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
 /**
  * Converts a validated LLM extraction (ingestion/llm_compiler.py --
  * real evidence, arbitrary text, not a fixed keyword/field list) into the
@@ -157,7 +178,20 @@ export function llmRequirementFromExtraction(extraction, evidenceText) {
     return null;
   }
   if (![requirement_id, action_type, approval_flag].every((v) => SLUG_RE.test(v))) return null;
-  if (typeof evidenceText !== "string" || !evidenceText.includes(evidence_quote)) return null;
+  if (typeof evidenceText !== "string") return null;
+  // Exact first, then formatting-insensitive: a faithful quote reproduced from
+  // line-wrapped markdown (newline as space, ' as ') would otherwise be
+  // rejected as hallucinated. The empty-after-normalization guard matters --
+  // "".includes("") is true, so a whitespace-only quote would pass everything
+  // above and ground a requirement in nothing at all.
+  const normalizedQuote = normalizeForMatch(evidence_quote);
+  if (!normalizedQuote) return null;
+  if (
+    !evidenceText.includes(evidence_quote) &&
+    !normalizeForMatch(evidenceText).includes(normalizedQuote)
+  ) {
+    return null;
+  }
 
   return {
     requirementId: requirement_id,

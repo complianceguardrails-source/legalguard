@@ -229,8 +229,20 @@ def validate_extraction(extraction: dict, evidence_text: str) -> tuple[bool, str
         if not _SLUG_RE.match(extraction[field]):
             return False, f"{field} is not a valid snake_case identifier: {extraction[field]!r}"
 
+    # Exact first (cheap, and the common case), then a formatting-insensitive
+    # retry. READMEs are line-wrapped markdown full of typographic punctuation,
+    # so a model can reproduce a sentence faithfully and still fail a byte
+    # comparison -- reproducing a newline as a space, or ' as '. Rejecting
+    # those discards real, grounded extractions. Normalization only ignores
+    # formatting: the same words in the same order must still be present, so
+    # this does not weaken the grounding guarantee it exists to provide. The
+    # JS-side llmRequirementFromExtraction() applies the identical rule, on
+    # purpose -- the two checks are meant to agree independently, not diverge.
     quote = extraction["evidence_quote"]
-    if quote not in evidence_text:
+    norm_quote = normalize_for_match(quote)
+    if not norm_quote:
+        return False, "evidence_quote is empty once formatting is normalized"
+    if quote not in evidence_text and norm_quote not in normalize_for_match(evidence_text):
         return False, "evidence_quote is not a verbatim substring of the real evidence text (likely hallucinated)"
 
     return True, "ok"
