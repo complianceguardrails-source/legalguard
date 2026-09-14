@@ -34,6 +34,8 @@ extraction from evidence no fixed keyword/field list could cover.
 """
 from __future__ import annotations
 
+import difflib
+import hashlib
 import json
 import logging
 import os
@@ -75,11 +77,111 @@ If one is:
 """
 
 
+# Arm A of the grounding experiment (grounding_experiment.py): identical to
+# EXTRACTION_PROMPT except that it neither demands nor accepts a quote. The
+# "OWN WORDS / not a generic aspiration" caution is deliberately KEPT, so the
+# only variable between arms is the citation requirement itself -- stripping
+# the caution too would compare a careless prompt against a careful one and
+# measure the wrong thing.
+EXTRACTION_PROMPT_UNGROUNDED = """You are reviewing the real README of an open-source repository that was mined as a candidate financial-AI use case, to decide whether its own text implies a specific, concrete compliance-relevant obligation that should be enforced before a matching action is allowed to proceed.
+
+Repository: {name}
+
+--- README (verbatim, real text) ---
+{evidence_text}
+--- end README ---
+
+Only extract a requirement if the README's OWN WORDS describe something concrete and specific enough to name an action type and an approval condition -- not a generic aspiration ("we care about compliance") and not something you infer from the repository's general subject matter alone.
+
+Respond with ONLY a single JSON object, no other text, matching exactly one of these two shapes:
+
+If no such concrete, specific obligation is stated in the text:
+{{"applies": false}}
+
+If one is:
+{{
+  "applies": true,
+  "requirement_id": "<snake_case identifier, e.g. sar_filing>",
+  "action_type": "<snake_case action name this gates, e.g. suspicious_activity_report>",
+  "approval_flag": "<snake_case input flag name required before that action, e.g. compliance_officer_signed_off>",
+  "rationale": "<one sentence: why the README implies this specific requirement>"
+}}
+"""
+
+# Arm A' -- the weak baseline, with the caution paragraph also removed. Brackets
+# how much of any measured effect is careful prompting rather than the citation
+# demand, which pre-empts "your baseline was too strong/too weak" from both
+# directions.
+EXTRACTION_PROMPT_UNGROUNDED_WEAK = """You are reviewing the real README of an open-source repository that was mined as a candidate financial-AI use case, to decide whether its own text implies a specific, concrete compliance-relevant obligation that should be enforced before a matching action is allowed to proceed.
+
+Repository: {name}
+
+--- README (verbatim, real text) ---
+{evidence_text}
+--- end README ---
+
+Respond with ONLY a single JSON object, no other text, matching exactly one of these two shapes:
+
+If no such concrete, specific obligation is stated in the text:
+{{"applies": false}}
+
+If one is:
+{{
+  "applies": true,
+  "requirement_id": "<snake_case identifier, e.g. sar_filing>",
+  "action_type": "<snake_case action name this gates, e.g. suspicious_activity_report>",
+  "approval_flag": "<snake_case input flag name required before that action, e.g. compliance_officer_signed_off>",
+  "rationale": "<one sentence: why the README implies this specific requirement>"
+}}
+"""
+
+# "grounded" is the unmodified production prompt: arms B and C share one API
+# call, since arm C is exactly arm B with validate_extraction() applied. That
+# makes the B-vs-C comparison exact rather than statistical.
+ARM_PROMPTS = {
+    "grounded": EXTRACTION_PROMPT,
+    "ungrounded": EXTRACTION_PROMPT_UNGROUNDED,
+    "ungrounded_weak": EXTRACTION_PROMPT_UNGROUNDED_WEAK,
+}
+
+GROUNDED_ARMS = frozenset({"grounded"})
+
+# A quote separates into "lifted a real phrase, then invented more" versus
+# "invented wholesale" on either signal: a contiguous run long enough that it
+# cannot be coincidental, or a run covering most of the claim. Coverage alone
+# is not enough -- a genuine fragment with a long invented tail scores low on
+# it precisely because the fabricated part is long.
+PARTIAL_FABRICATION_MIN_RUN_CHARS = 40
+PARTIAL_FABRICATION_MIN_COVERAGE = 0.6
+
+
 class ExtractionError(Exception):
     pass
 
 
-def _call_anthropic(prompt: str, api_key: str) -> str:
+def prompt_sha256(template: str) -> str:
+    return hashlib.sha256(template.encode("utf-8")).hexdigest()
+
+
+def call_anthropic(
+    prompt: str,
+    api_key: str,
+    model: str = ANTHROPIC_MODEL,
+    temperature: float | None = None,
+    max_tokens: int = 1024,
+) -> dict:
+    """Full Messages API response JSON, so callers that need usage counts and
+    a verbatim raw body (the experiment runner) get them without a second,
+    duplicated HTTP path. temperature=None omits the field entirely, which is
+    what production does."""
+    payload = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if temperature is not None:
+        payload["temperature"] = temperature
+
     resp = requests.post(
         ANTHROPIC_API_URL,
         headers={
@@ -87,16 +189,19 @@ def _call_anthropic(prompt: str, api_key: str) -> str:
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
         },
-        json={
-            "model": ANTHROPIC_MODEL,
-            "max_tokens": 1024,
-            "messages": [{"role": "user", "content": prompt}],
-        },
+        json=payload,
         timeout=60,
     )
     resp.raise_for_status()
-    data = resp.json()
-    return "".join(block.get("text", "") for block in data.get("content", []))
+    return resp.json()
+
+
+def text_of(response: dict) -> str:
+    return "".join(block.get("text", "") for block in response.get("content", []))
+
+
+def _call_anthropic(prompt: str, api_key: str) -> str:
+    return text_of(call_anthropic(prompt, api_key))
 
 
 def _parse_json_response(raw_text: str) -> dict:
@@ -129,6 +234,71 @@ def validate_extraction(extraction: dict, evidence_text: str) -> tuple[bool, str
         return False, "evidence_quote is not a verbatim substring of the real evidence text (likely hallucinated)"
 
     return True, "ok"
+
+
+_PUNCT_NORMALIZE = {
+    "‘": "'", "’": "'", "“": '"', "”": '"',
+    "–": "-", "—": "-", "…": "...", " ": " ",
+}
+
+
+def normalize_for_match(text: str) -> str:
+    for src, dst in _PUNCT_NORMALIZE.items():
+        text = text.replace(src, dst)
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def quote_match_report(quote: str, evidence_text: str) -> dict:
+    """Why a quote did or didn't match, beyond validate_extraction()'s
+    exact-substring yes/no.
+
+    READMEs are line-wrapped markdown with typographic quotes, so a model can
+    reproduce a sentence faithfully and still fail an exact byte comparison --
+    reproducing a newline as a space, or ' as '. Counting those as
+    hallucinations would inflate the measured catch rate, so they get their own
+    class. (Same failure mode as the case-sensitive Rego action_type
+    comparison: exact string equality over text that has been through a
+    formatter.)"""
+    norm_quote = normalize_for_match(quote)
+    if not norm_quote:
+        # "" is a substring of everything, so an absent quote would otherwise
+        # score as a perfect match. It is a missing field, not a hallucination,
+        # and belongs in neither the catch-rate numerator nor the clean bucket.
+        return {
+            "quote_exact_match": False,
+            "quote_normalized_match": False,
+            "quote_fuzzy_score": 0.0,
+            "quote_longest_run_chars": 0,
+            "rejection_class": "missing_quote",
+        }
+
+    exact = quote in evidence_text
+    norm_evidence = normalize_for_match(evidence_text)
+    normalized = norm_quote in norm_evidence
+
+    if normalized:
+        longest_run = len(norm_quote)
+    else:
+        matcher = difflib.SequenceMatcher(None, norm_quote, norm_evidence, autojunk=False)
+        longest_run = matcher.find_longest_match(0, len(norm_quote), 0, len(norm_evidence)).size
+    coverage = longest_run / len(norm_quote)
+
+    if exact:
+        rejection_class = "none"
+    elif normalized:
+        rejection_class = "normalization_nearmiss"
+    elif longest_run >= PARTIAL_FABRICATION_MIN_RUN_CHARS or coverage >= PARTIAL_FABRICATION_MIN_COVERAGE:
+        rejection_class = "partial_fabrication"
+    else:
+        rejection_class = "hard_hallucination"
+
+    return {
+        "quote_exact_match": exact,
+        "quote_normalized_match": normalized,
+        "quote_fuzzy_score": round(coverage, 4),
+        "quote_longest_run_chars": longest_run,
+        "rejection_class": rejection_class,
+    }
 
 
 def extract_compiled_requirement(name: str, evidence_text: str, api_key: str | None = None) -> dict | None:
