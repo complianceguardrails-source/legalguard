@@ -15,13 +15,58 @@ HF metadata is often incomplete for community uploads. model_modality will
 legitimately end up NULL for a real fraction of mined rows; that is a
 correct reflection of missing evidence, not a bug to "fix" by guessing.
 
-Queries below were each tested in isolation for precision before being
-kept. Dropped: "financial risk" (surfaced AI-safety-research fine-tunes
-about giving risky financial advice -- adjacent research artifacts, not
-production use cases, not what this taxonomy is for), "financial named
-entity recognition" (zero results), and in a later expansion pass --
-"insurance claim classification", "money laundering detection", and
-"algorithmic trading model" (all zero results).
+Three discovery channels, each with a different blind spot:
+
+  1. NAME SEARCH (?search=): matches the query against the model ID only.
+     Finds "FinBERT"/"FinGPT" fine-tunes by the hundreds and nothing whose
+     name is a brand -- InvestLM, FinTral, Fin-LLaMA, FinMA were all absent
+     from the database after 19 queries, because no query string appears
+     in their IDs. Before the other channels existed, only 6 of 150 mined
+     HF models were decoder-only: the corpus was BERT-era classifiers, and
+     the generative finance LLMs that actually carry hallucination and
+     disclosure risk were almost entirely missing.
+  2. TAG FILTER (?filter=<tag>): matches uploader-applied tags regardless
+     of name. This is what surfaces Llama-3-SEC-Base, finance-Llama3-8B,
+     Ling-Fin, FinR1 -- models a name search can never reach.
+  3. ORG LISTING (?author=<org>): everything published by an organisation
+     dedicated to finance models. TheFinAI alone has 40 (FinMA, FinLLaMA,
+     FinLLaVA, OpenFinLLM); the database held 2 of them.
+
+Each query, tag and org below was tested in isolation for precision
+before being kept, by sampling results at random and judging on-topic
+rate by hand. Dropped:
+
+  Queries -- "financial risk" (AI-safety-research fine-tunes about giving
+  risky financial advice: adjacent research artifacts, not production use
+  cases), "financial named entity recognition", "insurance claim
+  classification", "money laundering detection", "algorithmic trading
+  model" (all zero results).
+
+  Tags -- "sec" (10 results, mostly an unrelated "SeC" model family),
+  "credit" (2 results), "economics" (Llama2-7b-economist and similar:
+  adjacent research, not financial services -- same reasoning as
+  "financial risk"). The "finance" tag is kept but is a special case:
+  raw, it is ~15% on-topic (Gothica, idkai, Hackathon, Uncensored, xxxx --
+  junk uploads with copied tag lists), which would repeat the
+  awesome-list contamination documented in reclassify_awesome_list.py at
+  eight times the scale. With a downloads floor of 100 it is ~60% on-topic,
+  in line with the specific tags, so it carries one. (The likes floor is
+  still 0 for name search -- see mine_hf_use_cases -- because those hits
+  are on-topic by construction and popularity would only remove real
+  ones. Different channel, different purpose.)
+
+  Orgs -- "arcee-ai" (1 finance model in 200; the tag channel finds it),
+  "instruction-pretrain" (1 in 5, same), "FinancialSupport" (medical QA
+  and NanoGPT despite the name), "AI4Finance-Foundation" and "adaptllm"
+  (no models). Only organisations that publish finance models exclusively
+  are listed, because an org channel has no per-model filter.
+
+Quantisation re-uploads are skipped on every channel. Bulk quantisers
+(mradermacher, TheBloke, tensorblock, bartowski ...) republish upstream
+models as -GGUF/-GPTQ/-AWQ/-i1 variants with the upstream tags copied
+verbatim; in the "finance" tag with the downloads floor applied, 280 of
+446 results were such re-uploads. They are the same use case as the
+upstream model, which is found through its own listing.
 
 This is a discovery aid, not a technical audit -- every result should be
 treated as an unverified candidate for a human to confirm, same as
@@ -30,6 +75,7 @@ github_usecases.py.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Iterable
 
@@ -64,6 +110,27 @@ DEFAULT_QUERIES = [
     "anti money laundering",
 ]
 
+# (tag, minimum downloads). See the module docstring for why "finance"
+# alone carries a floor.
+DEFAULT_TAGS: list[tuple[str, int]] = [
+    ("financial", 0),
+    ("banking", 0),
+    ("trading", 0),
+    ("insurance", 0),
+    ("fintech", 0),
+    ("stock-market", 0),
+    ("finance", 100),
+]
+
+DEFAULT_AUTHORS = ["TheFinAI", "FinGPT", "ChanceFocus", "Duxiaoman-DI"]
+
+# Largest single tag ("finance") is ~2,700 models at time of writing;
+# this bounds runtime if a tag balloons rather than limiting real results.
+MAX_MODELS_PER_CHANNEL = 4000
+
+_QUANT_ID_RE = re.compile(r"[-_](gguf|gptq|awq|exl2|mlx|i1|imatrix|bnb|[48]bit)\b", re.IGNORECASE)
+_QUANT_TAGS = {"gguf", "gptq", "awq", "exl2", "mlx"}
+
 # Real, documented Hugging Face pipeline_tag values
 # (https://huggingface.co/docs/hub/models-tasks) mapped to the three model-
 # modality labels. Anything not covered here (image/audio pipeline tags,
@@ -87,71 +154,126 @@ def derive_model_modality(pipeline_tag: str | None, library_name: str | None) ->
     return None
 
 
+_HEADERS = {"User-Agent": "LegalGuard-UseCaseMiner/1.0"}
+
+
+def _list_models(params: dict, max_items: int = MAX_MODELS_PER_CHANNEL) -> list[dict]:
+    """Follows the Hub's Link: rel="next" pagination. The next-page URL
+    already carries the cursor, so params are sent on the first request
+    only."""
+    url: str | None = SEARCH_URL
+    items: list[dict] = []
+    while url and len(items) < max_items:
+        resp = requests.get(url, params=params, headers=_HEADERS, timeout=60)
+        resp.raise_for_status()
+        items.extend(resp.json())
+        links = requests.utils.parse_header_links(resp.headers.get("Link", ""))
+        url = next((link["url"] for link in links if link.get("rel") == "next"), None)
+        params = None
+        # HF's public API has no documented per-minute cap as strict as
+        # GitHub's, but pace requests conservatively regardless.
+        time.sleep(1.0)
+    return items[:max_items]
+
+
 def search_models(query: str, limit: int = 15) -> list[dict]:
-    resp = requests.get(
-        SEARCH_URL,
-        params={"search": query, "limit": limit},
-        headers={"User-Agent": "LegalGuard-UseCaseMiner/1.0"},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    return resp.json()
+    return _list_models({"search": query, "limit": limit}, max_items=limit)
 
 
-def mine_hf_use_cases(queries: Iterable[str] = DEFAULT_QUERIES, min_likes: int = 0) -> list[dict]:
+def is_quant_reupload(model: dict) -> bool:
+    if _QUANT_ID_RE.search(model.get("id", "")):
+        return True
+    return any(tag.lower() in _QUANT_TAGS for tag in model.get("tags", []))
+
+
+def _to_candidate(model: dict, matched_query: str) -> dict:
+    model_id = model["id"]
+    tags = model.get("tags", [])
+    description = f"Hugging Face model ({model.get('pipeline_tag') or 'no pipeline_tag'})"
+    sector, modality = classify_use_case(model_id, description, tags)
+    return {
+        "name": model_id,
+        "parent_sector": sector,
+        "modality": modality,
+        "risk_tier": classify_risk_tier(model_id, description, tags),
+        "description": description,
+        "hf_model_id": model_id,
+        "model_modality": derive_model_modality(model.get("pipeline_tag"), model.get("library_name")),
+        "matched_query": matched_query,
+        "likes": model.get("likes", 0),
+    }
+
+
+def mine_hf_use_cases(
+    queries: Iterable[str] = DEFAULT_QUERIES,
+    tags: Iterable[tuple[str, int]] = DEFAULT_TAGS,
+    authors: Iterable[str] = DEFAULT_AUTHORS,
+    min_likes: int = 0,
+) -> list[dict]:
     """Returns a deduped list of candidate use-case dicts ready for
-    db.upsert_mined_use_case(), classified by usecase_classifier.
+    db.upsert_mined_use_case(), classified by usecase_classifier, from
+    the three channels described in the module docstring. A model found
+    by more than one channel is attributed to the first that saw it.
 
-    min_likes defaults to 0 (unlike github_usecases.py's min_stars=3) --
-    most real, on-topic finance models on HF have very few likes (see
-    module docstring); a star-style popularity filter here would exclude
-    most genuinely relevant hits rather than just noise.
+    min_likes applies to name search only and defaults to 0 (unlike
+    github_usecases.py's min_stars=3) -- most real, on-topic finance
+    models on HF have very few likes, and a name-search hit is on-topic
+    by construction, so a popularity filter there removes real results
+    rather than noise. The tag channel's per-tag downloads floor is the
+    noise filter, applied where noise actually is.
     """
     seen_ids: set[str] = set()
     candidates: list[dict] = []
+    per_channel: dict[str, int] = {}
+    skipped_quant = 0
 
-    for query in queries:
-        try:
-            models = search_models(query)
-        except requests.RequestException:
-            logger.exception("HF search failed for query: %s", query)
-            continue
-
+    def consider(models: list[dict], channel: str, min_downloads: int = 0) -> None:
+        nonlocal skipped_quant
+        added = 0
         for model in models:
             model_id = model.get("id")
             if not model_id or model_id in seen_ids:
                 continue
-            if model.get("likes", 0) < min_likes:
+            if model.get("downloads", 0) < min_downloads:
+                continue
+            if is_quant_reupload(model):
+                skipped_quant += 1
                 continue
             seen_ids.add(model_id)
+            candidates.append(_to_candidate(model, channel))
+            added += 1
+        per_channel[channel] = added
 
-            tags = model.get("tags", [])
-            description = f"Hugging Face model ({model.get('pipeline_tag') or 'no pipeline_tag'})"
-            sector, modality = classify_use_case(model_id, description, tags)
-            risk_tier = classify_risk_tier(model_id, description, tags)
-            model_modality = derive_model_modality(model.get("pipeline_tag"), model.get("library_name"))
+    for query in queries:
+        try:
+            models = [m for m in search_models(query) if m.get("likes", 0) >= min_likes]
+        except requests.RequestException:
+            logger.exception("HF search failed for query: %s", query)
+            continue
+        consider(models, query)
 
-            candidates.append(
-                {
-                    "name": model_id,
-                    "parent_sector": sector,
-                    "modality": modality,
-                    "risk_tier": risk_tier,
-                    "description": description,
-                    "hf_model_id": model_id,
-                    "model_modality": model_modality,
-                    "matched_query": query,
-                    "likes": model.get("likes", 0),
-                }
-            )
+    for tag, min_downloads in tags:
+        try:
+            models = _list_models({"filter": tag, "limit": 1000})
+        except requests.RequestException:
+            logger.exception("HF tag listing failed for tag: %s", tag)
+            continue
+        consider(models, f"tag:{tag}", min_downloads)
 
-        # HF's public API has no documented per-minute cap as strict as
-        # GitHub's, but pace requests conservatively regardless.
-        time.sleep(1.0)
+    for author in authors:
+        try:
+            models = _list_models({"author": author, "limit": 1000})
+        except requests.RequestException:
+            logger.exception("HF author listing failed for org: %s", author)
+            continue
+        consider(models, f"author:{author}")
 
     logger.info(
-        "HF use-case miner: found %d unique candidate model(s), %d with a derivable model_modality",
+        "HF use-case miner: %d unique candidate model(s), %d with a derivable model_modality, "
+        "%d quantisation re-uploads skipped; per channel: %s",
         len(candidates),
         sum(1 for c in candidates if c["model_modality"]),
+        skipped_quant,
+        per_channel,
     )
     return candidates
