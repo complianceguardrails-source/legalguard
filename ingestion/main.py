@@ -29,7 +29,7 @@ from datetime import date, timedelta
 
 import db
 from config import RSS_FEEDS
-from sources import federal_register, rss_source
+from sources import eur_lex, federal_register, rss_source
 from tagger import classify_origin_driver, tag_regulation
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -51,6 +51,14 @@ def run() -> None:
         except Exception:
             logger.exception("RSS ingestion failed for %s (%s); continuing", issuing_body, feed_url)
 
+    # Not date-windowed like the two above: EUR-Lex rows are the current
+    # consolidated text of a fixed set of acts, and the cache check below
+    # is what makes re-ingesting them every run free.
+    try:
+        documents.extend(eur_lex.mine_eur_lex_regulations())
+    except Exception:
+        logger.exception("EUR-Lex ingestion failed; continuing with other sources")
+
     if not documents:
         logger.warning("No documents fetched this run.")
         return
@@ -68,9 +76,16 @@ def run() -> None:
                 skipped_count += 1
                 continue
 
-            driver_category, driver_reason = classify_origin_driver(
-                f"{doc['official_title']} {doc['statutory_text']}"
-            )
+            # A source that states its own origin driver (EUR-Lex, where the
+            # value and the per-article selection reason are written by
+            # hand) is not second-guessed by the text heuristic.
+            if doc.get("origin_driver_category"):
+                driver_category = doc["origin_driver_category"]
+                driver_reason = doc.get("origin_driver_description")
+            else:
+                driver_category, driver_reason = classify_origin_driver(
+                    f"{doc['official_title']} {doc['statutory_text']}"
+                )
 
             reg_id = db.upsert_regulation(
                 conn,
