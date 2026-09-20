@@ -69,8 +69,11 @@ curl localhost:8787/healthz     # {"ok":true,"opa_version":"1.20.2"}
 ```
 
 `service/Dockerfile` bakes in a pinned, checksum-verified `opa`; `render.yaml`
-deploys it as `legalguard-generator`. The adversarial harness also lives here:
-`npm run harness`.
+deploys it as `legalguard-generator`, live at
+`https://legalguard-generator.onrender.com` (free plan: the first request
+after idle takes ~30 s to wake). The App Store build points at it via
+`EXPO_PUBLIC_GENERATOR_URL` in `app/eas.json`. The adversarial harness also
+lives here: `npm run harness`.
 
 ### 5. Mobile app
 

@@ -17,7 +17,8 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://legalguard-postgrest.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://legalguard-postgrest.onrender.com",
+        "EXPO_PUBLIC_GENERATOR_URL": "https://legalguard-generator.onrender.com"
       }
     },
     "production": {
@@ -26,7 +27,8 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://legalguard-postgrest.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://legalguard-postgrest.onrender.com",
+        "EXPO_PUBLIC_GENERATOR_URL": "https://legalguard-generator.onrender.com"
       }
     }
   },
