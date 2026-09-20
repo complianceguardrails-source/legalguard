@@ -58,6 +58,10 @@ CREATE TABLE banking_use_cases (
     -- retried every run. See database/migrations/007_add_hf_model_card.sql.
     model_card_text          TEXT,
     model_card_fetched_at    TIMESTAMPTZ,
+    -- What the system does (multi-valued), as opposed to parent_sector
+    -- (who would own it). NULL = no financial category matched and the
+    -- app hides the row. See database/migrations/008_add_use_case_categories.sql.
+    categories               TEXT[],
     created_at          TIMESTAMPTZ DEFAULT now(),
     updated_at          TIMESTAMPTZ DEFAULT now(),
     UNIQUE (name)
@@ -66,6 +70,7 @@ CREATE TABLE banking_use_cases (
 CREATE INDEX idx_use_cases_sector   ON banking_use_cases(parent_sector);
 CREATE INDEX idx_use_cases_modality ON banking_use_cases(modality);
 CREATE INDEX idx_use_cases_source   ON banking_use_cases(source);
+CREATE INDEX idx_use_cases_categories ON banking_use_cases USING GIN (categories);
 
 -- Prevents the GitHub miner from inserting the same repo twice under a
 -- slightly different name; NULLs (curated/user_submitted rows with no repo

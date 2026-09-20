@@ -1,6 +1,7 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Radar, Database, Scale, Telescope, Rocket } from "lucide-react-native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { Compass, Radar, Database, Scale, Telescope, Rocket } from "lucide-react-native";
 
 import { colors, type } from "../theme";
 import AppHeader from "../components/AppHeader";
@@ -9,12 +10,30 @@ import KnowledgeBaseScreen from "../screens/KnowledgeBaseScreen";
 import ImpactDiffScreen from "../screens/ImpactDiffScreen";
 import HorizonScreen from "../screens/HorizonScreen";
 import GitOpsConsoleScreen from "../screens/GitOpsConsoleScreen";
+import DiscoverScreen from "../screens/DiscoverScreen";
+import DeckScreen from "../screens/DeckScreen";
+import UseCaseDetailScreen from "../screens/UseCaseDetailScreen";
 
 const Tab = createBottomTabNavigator();
+const DiscoverStack = createNativeStackNavigator();
+
+// Discover is the landing flow: category cloud -> swipe deck -> use-case
+// detail. Its screens carry their own back controls, so the stack draws no
+// header of its own; the tab's AppHeader stays on top throughout.
+function DiscoverFlow() {
+  return (
+    <DiscoverStack.Navigator screenOptions={{ headerShown: false }}>
+      <DiscoverStack.Screen name="Discover" component={DiscoverScreen} />
+      <DiscoverStack.Screen name="Deck" component={DeckScreen} />
+      <DiscoverStack.Screen name="UseCaseDetail" component={UseCaseDetailScreen} />
+    </DiscoverStack.Navigator>
+  );
+}
 
 export default function AppNavigator() {
   return (
     <Tab.Navigator
+      initialRouteName="DiscoverFlow"
       screenOptions={{
         header: () => <AppHeader />,
         tabBarActiveTintColor: colors.primary,
@@ -26,6 +45,15 @@ export default function AppNavigator() {
       {/* Tab names/labels match Base44's generated app (Radar / Use Cases /
           Audit / Horizon / Dispatch) so the two front ends read as the same
           product -- component names stay as-is to avoid unrelated churn. */}
+      <Tab.Screen
+        name="DiscoverFlow"
+        component={DiscoverFlow}
+        options={{
+          title: "Discover",
+          tabBarLabel: "Discover",
+          tabBarIcon: ({ color, size }) => <Compass color={color} size={size} />,
+        }}
+      />
       <Tab.Screen
         name="Dashboard"
         component={DashboardScreen}

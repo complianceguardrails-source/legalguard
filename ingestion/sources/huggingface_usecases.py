@@ -248,12 +248,20 @@ def declared_base_model(card_data: dict | None) -> str | None:
     return value if isinstance(value, str) else None
 
 
-_FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.DOTALL)
+# Leading whitespace or a BOM before the opening fence is real: 22 cards in
+# production began "\n---", and with an anchored "\A---" the frontmatter
+# was kept as prose -- the app showed "tags: - n8n - automation ..." as a
+# description, and those rows were classified on their tag lists.
+_FRONTMATTER_RE = re.compile(r"\A[\ufeff\s]*---[ \t]*\r?\n.*?\r?\n---[ \t]*(?:\r?\n|\Z)", re.DOTALL)
+_FRONTMATTER_OPEN_RE = re.compile(r"\A[\ufeff\s]*---[ \t]*\r?\n")
 _CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _MD_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 _MD_LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 _MARKUP_LINE_RE = re.compile(r"^\s*(#|\||---|\*\*\*|https?://)")
+_YAMLISH_RE = re.compile(r"^[a-z_][\w-]*:\s*(?:-\s|\S|$)")
+_INLINE_MARKUP_RE = re.compile(r"(\*\*|__|`|~~)")
+_BLOCKQUOTE_RE = re.compile(r"^\s*>+\s?")
 
 CARD_PROSE_CHARS = 800
 
@@ -263,16 +271,28 @@ def card_prose_paragraphs(card_text: str) -> list[str]:
     not a sentence about the model removed: frontmatter, fenced code (which
     is where usage and instruction-tuning examples live), HTML, images,
     badges, tables, headings, bare URLs. Markdown link text is kept."""
-    body = _FRONTMATTER_RE.sub("", card_text, count=1)
+    if _FRONTMATTER_OPEN_RE.match(card_text) and not _FRONTMATTER_RE.match(card_text):
+        # Opened but never closed within the stored text: sentence-transformer
+        # cards carry widget example lists that alone exceed
+        # MODEL_CARD_MAX_CHARS. Everything we have is frontmatter, so there is
+        # no prose -- and frontmatter must never be mistaken for it.
+        return []
+    # Repeated, not once: one production card carried two consecutive
+    # frontmatter blocks, and the second was read as prose.
+    body = card_text
+    while _FRONTMATTER_RE.match(body):
+        body = _FRONTMATTER_RE.sub("", body, count=1)
     body = _CODE_BLOCK_RE.sub("", body)
     body = _MD_IMAGE_RE.sub("", body)
     body = _MD_LINK_RE.sub(r"\1", body)
     body = _HTML_TAG_RE.sub("", body)
     paragraphs = []
     for block in re.split(r"\n\s*\n", body):
-        lines = [ln.strip() for ln in block.strip().splitlines()]
+        lines = [_INLINE_MARKUP_RE.sub("", _BLOCKQUOTE_RE.sub("", ln)).strip() for ln in block.strip().splitlines()]
         prose = [ln for ln in lines if ln and not _MARKUP_LINE_RE.match(ln)]
-        if prose:
+        # YAML that lives in the body rather than the frontmatter (a
+        # "datasets:\n- ..." block under a heading) is metadata, not prose.
+        if prose and not _YAMLISH_RE.match(prose[0]):
             paragraphs.append(" ".join(prose))
     return paragraphs
 

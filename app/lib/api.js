@@ -29,8 +29,15 @@ async function getJson(path, fallback) {
 }
 
 export async function fetchUseCases() {
-  // PostgREST auto-exposes tables as REST resources: GET /banking_use_cases
-  return getJson("/banking_use_cases?select=*&order=parent_sector", MOCK_USE_CASES);
+  // PostgREST auto-exposes tables as REST resources: GET /banking_use_cases.
+  // A mined row with no financial category is not shown anywhere in the
+  // app: tagging the corpus showed those are overwhelmingly not financial
+  // AI (leaks from bank-org and generic-keyword mining). Curated rows are
+  // human-vetted and always shown. See ingestion/usecase_categories.py.
+  return getJson(
+    "/banking_use_cases?select=*&or=(categories.not.is.null,source.eq.curated)&order=parent_sector",
+    MOCK_USE_CASES
+  );
 }
 
 export async function fetchRegulations({ limit = 20 } = {}) {

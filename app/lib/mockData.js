@@ -7,6 +7,7 @@ export const MOCK_USE_CASES = [
   {
     id: "uc-1",
     name: "Voice Agent: Mortgage Escalation Support",
+    categories: ["credit_lending", "banking_support"],
     parent_sector: "Front Office",
     modality: "voice_agentic",
     risk_tier: "high_risk",
@@ -18,6 +19,7 @@ export const MOCK_USE_CASES = [
   {
     id: "uc-2",
     name: "Green Mortgage EPC/ESG Verification",
+    categories: ["credit_lending", "esg_climate"],
     parent_sector: "Consumer Finance",
     modality: "vision",
     risk_tier: "high_risk",
@@ -30,6 +32,7 @@ export const MOCK_USE_CASES = [
   {
     id: "uc-3",
     name: "Buy-to-Let Rental Yield Stress Testing",
+    categories: ["credit_lending", "risk_management"],
     parent_sector: "Consumer Finance",
     modality: "structured",
     risk_tier: "high_risk",
@@ -38,6 +41,7 @@ export const MOCK_USE_CASES = [
   {
     id: "uc-4",
     name: "Unsecured Consumer Credit Scoring",
+    categories: ["credit_lending"],
     parent_sector: "Consumer Finance",
     modality: "structured",
     risk_tier: "high_risk",

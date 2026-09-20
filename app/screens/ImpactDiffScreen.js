@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Linking } from "react-native";
 import { Code2, FolderPlus, RefreshCw, Scale, GitBranchPlus, ExternalLink, Brain, Network, Wrench, Activity } from "lucide-react-native";
 
@@ -87,10 +87,30 @@ export default function ImpactDiffScreen({ route }) {
     setSelectedUseCaseId(null);
   }, [route?.params?.regId]);
 
+  // Arriving from a use case's detail screen (Discover flow): land with
+  // that use case already selected, so "Review and dispatch" is one tap.
+  const listRef = useRef(null);
+  useEffect(() => {
+    if (!route?.params?.useCaseId) return;
+    setSelectedUseCaseId(route.params.useCaseId);
+    setStatusMessage(null);
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    // handoffAt is a per-tap nonce, so handing off the same use case twice
+    // (after it was deselected here) re-selects it.
+  }, [route?.params?.useCaseId, route?.params?.handoffAt]);
+
   const navReg = route?.params?.regId ? regulations.find((r) => r.reg_id === route.params.regId) : null;
-  const listData = navReg
+  const sortedData = navReg
     ? sortByRiskDesc(useCases.filter((u) => (navReg.affected_use_case_ids || []).includes(u.id)))
     : sortByRiskDesc(useCases);
+  // The handed-off use case is pinned to the top while it stays selected:
+  // the list is ordered by risk, so a minimal-risk one would otherwise open
+  // its pane a thousand rows down, out of sight. Deselecting it (or picking
+  // another) lets it fall back to its place in the order.
+  const pinnedId = route?.params?.useCaseId && route.params.useCaseId === selectedUseCaseId ? selectedUseCaseId : null;
+  const listData = pinnedId
+    ? [...sortedData.filter((u) => u.id === pinnedId), ...sortedData.filter((u) => u.id !== pinnedId)]
+    : sortedData;
 
   const selectedUseCase = useCases.find((u) => u.id === selectedUseCaseId);
   // Every regulation the tagger has matched to this use case, not just the
@@ -452,6 +472,7 @@ export default function ImpactDiffScreen({ route }) {
   return (
     <View style={styles.container}>
       <FlatList
+        ref={listRef}
         style={styles.scrollArea}
         contentContainerStyle={{ padding: 20 }}
         data={listData}

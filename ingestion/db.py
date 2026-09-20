@@ -682,3 +682,34 @@ def set_hf_model_card_enrichment(
             (card_text, description, parent_sector, modality, risk_tier, model_modality,
              derive_data_interception_state(modality), use_case_id),
         )
+
+
+def fetch_use_cases_for_categorisation(conn: psycopg.Connection) -> list[dict]:
+    """Every use case with the evidence the category tagger reads: name,
+    description, and whichever real prose the row has -- its model card
+    (HF-mined) or README (GitHub-mined, from the LLM extraction step). All
+    sources, including curated: categories describe what a system does,
+    and a hand-entered row does that as much as a mined one."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, name, description, source, categories, model_card_text, llm_evidence_text "
+            "FROM banking_use_cases ORDER BY name"
+        )
+        cols = [d.name for d in cur.description]
+        rows = []
+        for row in cur.fetchall():
+            record = dict(zip(cols, row))
+            for key in ("name", "description", "model_card_text", "llm_evidence_text"):
+                if isinstance(record.get(key), (bytes, bytearray)):
+                    record[key] = record[key].decode("utf-8")
+            rows.append(record)
+        return rows
+
+
+def set_use_case_categories(conn: psycopg.Connection, use_case_id: str, categories: list[str]) -> None:
+    """Empty list is stored as NULL, which is what the app filters on."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE banking_use_cases SET categories = %s, updated_at = now() WHERE id = %s",
+            (categories or None, use_case_id),
+        )
