@@ -14,6 +14,7 @@ See `docs/ARCHITECTURE.md` for what's real vs. a documented next step, and
 - **API**: [PostgREST](https://postgrest.org) (open source, auto-generates REST from the schema)
 - **Ingestion**: Python script run nightly by a free GitHub Actions cron job
 - **Mobile app**: Expo / React Native
+- **Guardrail generation**: a small Node service with a pinned `opa` binary that verifies every package before the app sees it (Render free tier)
 - **GitOps**: the phone calls the GitHub REST API directly using a user-supplied Personal Access Token stored in the OS keychain -- no server ever sees it
 
 ## Setup
@@ -52,18 +53,41 @@ brew install postgrest
 postgrest postgrest.conf   # see docs/POSTGREST.md for the conf contents
 ```
 
-### 4. Mobile app
+### 4. Guardrail generation service
+
+Generates each use case's guardrail package and verifies it with the real
+`opa` binary before returning it -- `opa check --strict` plus the package's
+own generated test suite. The app never receives a policy that fails its
+own tests, and a rule change ships without an App Store release. Holds no
+credentials; the GitHub push still happens from the app.
+
+```bash
+cd service
+npm install
+PORT=8787 node server.js        # needs `opa` on PATH
+curl localhost:8787/healthz     # {"ok":true,"opa_version":"1.20.2"}
+```
+
+`service/Dockerfile` bakes in a pinned, checksum-verified `opa`; `render.yaml`
+deploys it as `legalguard-generator`. The adversarial harness also lives here:
+`npm run harness`.
+
+### 5. Mobile app
 
 ```bash
 cd app
 npm install
-EXPO_PUBLIC_API_URL=http://localhost:3000 npx expo start
+EXPO_PUBLIC_API_URL=http://localhost:3000 \
+EXPO_PUBLIC_GENERATOR_URL=http://localhost:8787 npx expo start
 ```
 
 Without `EXPO_PUBLIC_API_URL` set, the app runs against bundled mock data
 (`app/lib/mockData.js`) so you can see every screen before any backend is deployed.
+`EXPO_PUBLIC_GENERATOR_URL` has no mock fallback on purpose: an unverified
+policy is the one thing the service exists to prevent, so without it the
+Audit screen says so and dispatch stays disabled.
 
-### 5. Connect GitHub in the app
+### 6. Connect GitHub in the app
 
 Open the **Dispatch** tab → paste a **classic** [Personal Access Token](https://github.com/settings/tokens/new?scopes=repo,workflow)
 with both `repo` **and** `workflow` scope → set a target repo for whichever
@@ -80,7 +104,7 @@ token is written to the device's
 secure keychain (`expo-secure-store`) and is never sent to the
 Postgres/PostgREST backend.
 
-### 6. Ship to the App Store
+### 7. Ship to the App Store
 
 See `docs/APP_STORE_METADATA.md` for listing copy/reviewer notes and
 `docs/PRIVACY_POLICY.md` for the privacy policy text (fill in the
@@ -97,13 +121,16 @@ ingestion/    Regulation crawler (Federal Register API + RSS) + GitHub
               use-case miner, dedup, origin-driver & blast-radius taggers
 .github/      Free nightly (regs) + weekly (use cases) cron workflows
 app/          Expo/React Native mobile app
+service/      Guardrail generation + opa verification service, and the
+              adversarial harness against its generated policies
 docs/         Architecture notes and PostgREST setup guide
 ```
 
 ## Known limitations (see docs/ARCHITECTURE.md for the full table)
 
 The legal-text → policy-code compiler described in the original design
-session is **not implemented** here -- `ImpactDiffScreen.js` generates a
-deterministic draft template, not a genuine neuro-symbolic translation.
+session is **not implemented** here -- the generation service produces a
+deterministic draft template (`service/lib/guardrailTemplate.js`), verified
+with `opa` but not a genuine neuro-symbolic translation.
 Every guardrail this app proposes should be treated as a draft for human
 review, not an auto-mergeable patch, until that compiler exists.

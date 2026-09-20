@@ -3,7 +3,7 @@
 // reader can scan the same row and pull out the fact relevant to them. Every
 // call site supplies real data already present in the schema; this component
 // only renders it, it never invents a value (no fabricated coverage
-// percentages, versions, or sync states -- see guardrailThresholds.js for why
+// percentages, versions, or sync states -- see service/lib/guardrailThresholds.js for why
 // that line matters in this project).
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";

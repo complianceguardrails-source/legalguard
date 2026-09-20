@@ -1,0 +1,18 @@
+{
+  "name": "legalguard-generator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Guardrail package generation with opa verification, so the app never ships policy-generation logic and never receives a package that fails its own tests.",
+  "type": "module",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "harness": "node scripts/adversarialHarness.mjs"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

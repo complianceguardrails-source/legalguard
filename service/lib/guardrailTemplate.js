@@ -18,7 +18,7 @@
 // give a compliance engineer a correct, runnable starting skeleton to edit,
 // not a finished, mergeable policy.
 
-import { getThresholdsForSector } from "./guardrailThresholds";
+import { getThresholdsForSector } from "./guardrailThresholds.js";
 
 // The real, narrow compilation step this system performs: each entry below
 // is gated on a genuine derived signal (manifest-scanned dependencies or

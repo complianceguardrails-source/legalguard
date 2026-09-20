@@ -23,3 +23,16 @@ services:
         value: "0.0.0.0"
       - key: PGRST_SERVER_PORT
         value: "10000"
+
+  # Guardrail generation service (service/). Node + a pinned opa binary; the
+  # app POSTs a use case and gets back a package that has already passed opa
+  # check and its own generated tests. Holds no credentials -- the GitHub
+  # push still happens from the app. Set the app's EXPO_PUBLIC_GENERATOR_URL
+  # to this service's URL.
+  - type: web
+    name: legalguard-generator
+    runtime: docker
+    plan: free
+    dockerfilePath: ./service/Dockerfile
+    dockerContext: ./service
+    healthCheckPath: /healthz

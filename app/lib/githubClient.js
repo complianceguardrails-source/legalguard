@@ -372,7 +372,7 @@ export async function createRepository(name, description, token, { isPrivate = f
 
 /**
  * Full "New Guardrail Initiation" flow: creates a brand-new repo, then pushes
- * the entire standard guardrail template (see lib/guardrailTemplate.js) as
+ * the entire standard guardrail template (see service/lib/guardrailTemplate.js, served via lib/generator.js) as
  * ONE atomic commit on a review branch, opens a PR into the new repo's
  * default branch, and auto-merges it -- per explicit user instruction, every
  * generated guardrail lands on `main` immediately rather than sitting open
@@ -383,7 +383,7 @@ export async function createRepository(name, description, token, { isPrivate = f
  * @param {object} params
  * @param {string} params.repoName - from guardrailNaming.guardrailRepoName()
  * @param {string} params.description
- * @param {Record<string,string>} params.templateFiles - from buildGuardrailTemplate()
+ * @param {Record<string,string>} params.templateFiles - from the generation service (lib/generator.js)
  * @param {string} params.branchName - e.g. from guardrailNaming.complianceBranchName()
  * @param {string} params.prTitle
  * @param {string} params.prBody
@@ -416,7 +416,7 @@ export async function initializeGuardrailRepo({
   // immediately after a 201 from repo creation can 404 for a second or two.
   const baseSha = await retryUntilReady(() => getBranchSha(owner, repo, baseBranch, token));
   await createBranch(owner, repo, branchName, baseSha, token);
-  // useBaseTree: false -- buildGuardrailTemplate() always generates a
+  // useBaseTree: false -- the generation service always produces a
   // complete, self-contained file set (including its own README.md), so
   // nothing needs to be inherited from the auto_init commit. This also
   // sidesteps a confirmed GitHub-side issue where a base_tree referencing
@@ -498,7 +498,7 @@ export async function initializeGuardrailRepo({
  * @param {object} params
  * @param {string} params.owner
  * @param {string} params.repo
- * @param {Record<string,string>} params.templateFiles - from buildGuardrailTemplate()
+ * @param {Record<string,string>} params.templateFiles - from the generation service (lib/generator.js)
  * @param {string} params.branchName
  * @param {string} params.prTitle
  * @param {string} params.prBody

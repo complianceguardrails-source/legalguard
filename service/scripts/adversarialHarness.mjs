@@ -1,6 +1,7 @@
 // Systematic adversarial-input harness for compiled guardrail rules
 // (real, runnable -- imports the actual buildGuardrailTemplate from
-// ../lib/guardrailTemplate.js, not a copy).
+// ../lib/guardrailTemplate.js directly -- the same module the generation
+// service serves, not a copy).
 //
 // For every compiled rule on a real use case, generates a battery of
 // adversarial/boundary input payloads and runs the real `opa` binary
@@ -30,33 +31,16 @@
 //
 // Usage: node adversarialHarness.mjs [output.json]
 
-import { mkdirSync, writeFileSync, readFileSync, rmSync, copyFileSync } from "fs";
+import { mkdirSync, writeFileSync, readFileSync, rmSync } from "fs";
 import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 import { tmpdir } from "os";
 import { execFileSync } from "child_process";
 
+import { buildGuardrailTemplate } from "../lib/guardrailTemplate.js";
+
 const OUT_FILE = process.argv[2] || "adversarial_results.json";
 const WORKDIR = join(tmpdir(), "legalguard_adversarial_harness");
-const HERE = dirname(fileURLToPath(import.meta.url));
-
-// app/lib/*.js uses ESM `export` syntax for Metro's bundler, which ignores
-// package.json's "type" field entirely -- but plain Node respects it
-// strictly, and app/package.json has no "type": "module" (changing that
-// globally to suit this one standalone script risks the real Expo/RN
-// build in ways not worth verifying here). Stage real, unmodified copies
-// under .mjs extensions instead, which Node always treats as ESM
-// regardless of package.json -- the same manual technique used throughout
-// this project's development, just automated so this script runs
-// standalone with a plain `node adversarialHarness.mjs`.
 mkdirSync(WORKDIR, { recursive: true });
-copyFileSync(join(HERE, "../lib/guardrailThresholds.js"), join(WORKDIR, "guardrailThresholds.mjs"));
-const templateSrc = readFileSync(join(HERE, "../lib/guardrailTemplate.js"), "utf8").replace(
-  'from "./guardrailThresholds"',
-  'from "./guardrailThresholds.mjs"'
-);
-writeFileSync(join(WORKDIR, "guardrailTemplate.mjs"), templateSrc);
-const { buildGuardrailTemplate } = await import(join(WORKDIR, "guardrailTemplate.mjs"));
 
 function writeFiles(outDir, files) {
   for (const [relPath, content] of Object.entries(files)) {

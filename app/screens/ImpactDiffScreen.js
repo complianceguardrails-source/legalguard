@@ -8,8 +8,7 @@ import { getGitHubCredentials } from "../lib/auth";
 import { getAllRepoMappings, setRepoMapping } from "../lib/repoMapping";
 import { initializeGuardrailRepo, updateGuardrailRepo, getFileContent } from "../lib/githubClient";
 import { guardrailRepoName, guardrailBranchName } from "../lib/guardrailNaming";
-import { buildGuardrailTemplate } from "../lib/guardrailTemplate";
-import { getThresholdsForSector } from "../lib/guardrailThresholds";
+import { fetchGuardrailPackage } from "../lib/generator";
 import { diffLines } from "../lib/diff";
 import { MODALITY_ICON, RISK_TIER_STYLE } from "../lib/useCaseDisplay";
 import RegulationCard from "../components/RegulationCard";
@@ -48,6 +47,12 @@ export default function ImpactDiffScreen({ route }) {
   // currently-deployed bundle to diff against, a string once one's found.
   const [deployedContent, setDeployedContent] = useState(null);
   const [diffChecking, setDiffChecking] = useState(false);
+  // The generated package for the selected use case, from the generation
+  // service (lib/generator.js): { files, thresholds, verification }. Null
+  // until it arrives; nothing on this screen may dispatch without it.
+  const [generated, setGenerated] = useState(null);
+  const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState(null);
 
   useEffect(() => {
     fetchRegulations({ limit: 200 }).then(setRegulations);
@@ -91,12 +96,46 @@ export default function ImpactDiffScreen({ route }) {
   // Every regulation the tagger has matched to this use case, not just the
   // one that brought you here -- the whole point of bundling is that one
   // guardrail repo reflects ALL of a use case's applicable policies at once.
-  const matchedRegulations = selectedUseCase
-    ? regulations.filter((r) => (r.affected_use_case_ids || []).includes(selectedUseCase.id))
-    : [];
+  // Memoised so the generation effect below re-runs only when the inputs
+  // actually change, not on every render's fresh array identity.
+  const matchedRegulations = useMemo(
+    () =>
+      selectedUseCase
+        ? regulations.filter((r) => (r.affected_use_case_ids || []).includes(selectedUseCase.id))
+        : [],
+    [regulations, selectedUseCase]
+  );
   const existingMapping = selectedUseCase ? mappings[selectedUseCase.name] : null;
-  const templateFiles = selectedUseCase ? buildGuardrailTemplate(selectedUseCase, matchedRegulations) : null;
+  const templateFiles = generated?.files ?? null;
   const draftPreview = templateFiles ? templateFiles["policies/rules.rego"] : "";
+
+  // Ask the generation service for this use case's package. It only ever
+  // returns one that passed opa check and its own generated tests; an
+  // error here means no package, and the dispatch button stays disabled.
+  useEffect(() => {
+    let cancelled = false;
+    setGenerated(null);
+    setGenerationError(null);
+    if (!selectedUseCase) {
+      setGenerating(false);
+      return;
+    }
+    setGenerating(true);
+    fetchGuardrailPackage(selectedUseCase, matchedRegulations)
+      .then((pkg) => {
+        if (!cancelled) setGenerated(pkg);
+      })
+      .catch((err) => {
+        console.warn("[ImpactDiff] generation failed:", err.message);
+        if (!cancelled) setGenerationError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setGenerating(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedUseCase, matchedRegulations]);
 
   // Real diff, not a mockup: fetches whatever's actually deployed at
   // policies/rules.rego in this use case's mapped repo (if one exists yet)
@@ -139,6 +178,10 @@ export default function ImpactDiffScreen({ route }) {
     if (!selectedUseCase) return;
     if (matchedRegulations.length === 0) {
       setStatusMessage({ type: "error", text: "No regulations matched to this use case yet -- nothing to bundle." });
+      return;
+    }
+    if (!templateFiles) {
+      setStatusMessage({ type: "error", text: "No verified guardrail package yet -- generation hasn't completed." });
       return;
     }
     setBusy(true);
@@ -295,20 +338,32 @@ export default function ImpactDiffScreen({ route }) {
           <Text style={styles.diffHeader}>Blueprint of controls -- {selectedUseCase.parent_sector || "Uncategorized"}</Text>
           <Text style={styles.blueprintIntro}>
             What dispatching will actually bundle into this use case's single guardrail repo: real, citable
-            thresholds where one exists, an explicit TODO where it doesn't (see guardrailThresholds.js -- no
-            fabricated defaults either way).
+            thresholds where one exists, an explicit TODO where it doesn't (see service/lib/guardrailThresholds.js --
+            no fabricated defaults either way).
           </Text>
-          {getThresholdsForSector(selectedUseCase.parent_sector).map((t) => (
-            <View key={t.key} style={styles.blueprintRow}>
-              <View style={styles.blueprintRowHeader}>
-                <Text style={styles.blueprintKey}>{t.key}</Text>
-                <Text style={[styles.blueprintValue, t.value === null && styles.blueprintValueTodo]}>
-                  {t.value === null ? "TODO" : JSON.stringify(t.value)}
-                </Text>
+          {generating ? (
+            <Text style={styles.remediationMissing}>Generating and verifying the guardrail package…</Text>
+          ) : generationError ? (
+            <Text style={[styles.statusText, styles.statusError]}>{generationError}</Text>
+          ) : (
+            (generated?.thresholds ?? []).map((t) => (
+              <View key={t.key} style={styles.blueprintRow}>
+                <View style={styles.blueprintRowHeader}>
+                  <Text style={styles.blueprintKey}>{t.key}</Text>
+                  <Text style={[styles.blueprintValue, t.value === null && styles.blueprintValueTodo]}>
+                    {t.value === null ? "TODO" : JSON.stringify(t.value)}
+                  </Text>
+                </View>
+                <Text style={styles.blueprintCitation}>{t.citation}</Text>
               </View>
-              <Text style={styles.blueprintCitation}>{t.citation}</Text>
-            </View>
-          ))}
+            ))
+          )}
+          {generated?.verification && (
+            <Text style={styles.blueprintCitation}>
+              Verified server-side with opa {generated.verification.opa_version}: check passed,{" "}
+              {generated.verification.tests.passed}/{generated.verification.tests.total} generated tests passing.
+            </Text>
+          )}
         </View>
 
         <View style={styles.diffColumn}>
@@ -316,7 +371,11 @@ export default function ImpactDiffScreen({ route }) {
             <Code2 size={12} color={colors.secondary} />
             <Text style={styles.diffHeader}>Generated policy (draft)</Text>
           </View>
-          {diffChecking ? (
+          {generating || !templateFiles ? (
+            <Text style={styles.remediationMissing}>
+              {generationError ? "No draft -- generation failed (see above)." : "Generating and verifying the draft…"}
+            </Text>
+          ) : diffChecking ? (
             <Text style={styles.remediationMissing}>Checking the mapped repo for a currently-deployed version…</Text>
           ) : deployedContent ? (
             <View style={styles.diffCodeBlock}>
@@ -348,7 +407,11 @@ export default function ImpactDiffScreen({ route }) {
           )}
         </View>
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleDispatch} disabled={busy || matchedRegulations.length === 0}>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={handleDispatch}
+          disabled={busy || matchedRegulations.length === 0 || !templateFiles}
+        >
           {existingMapping?.repo ? (
             <RefreshCw size={14} color={colors.primary} style={{ marginRight: 6 }} />
           ) : (
