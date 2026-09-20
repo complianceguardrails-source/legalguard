@@ -1,38 +1,32 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, RefreshControl } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { Database, Scale, GitBranchPlus } from "lucide-react-native";
+import { Database, Scale, ShieldCheck } from "lucide-react-native";
 
 import { colors, type, radius } from "../theme";
-import { fetchPendingRegulations, fetchUseCaseCount, fetchRegulationCount } from "../lib/api";
-import { getAllRepoMappings } from "../lib/repoMapping";
+import { fetchPendingRegulations, fetchUseCaseCount, fetchRegulationCount, fetchGuardrailRepoCount } from "../lib/api";
 import RegulationCard from "../components/RegulationCard";
 
 export default function DashboardScreen() {
-  const navigation = useNavigation();
-  // useCaseCount/regulationCount are real counts from the shared reference
-  // database; templatesGenerated is deliberately NOT from that shared
-  // backend -- it's read from this device's own local repoMapping.js
-  // storage, since the shared DB has no write path for guardrail activity
-  // (by design -- see docs/POSTGREST.md) and guardrail dispatch is a
-  // per-user, per-device thing, not a cross-user statistic.
+  // All three tiles are real counts from the shared reference database:
+  // published use cases, tracked regulations, and the open-source guardrail
+  // repositories mapped to the risk taxonomy (guardrail_repos).
   const [useCaseCount, setUseCaseCount] = useState(0);
   const [regulationCount, setRegulationCount] = useState(0);
-  const [templatesGenerated, setTemplatesGenerated] = useState(0);
+  const [guardrailCount, setGuardrailCount] = useState(0);
   const [pendingRegulations, setPendingRegulations] = useState([]);
   const [totalPending, setTotalPending] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    const [ucCount, regCount, mappings, pending] = await Promise.all([
+    const [ucCount, regCount, grCount, pending] = await Promise.all([
       fetchUseCaseCount(),
       fetchRegulationCount(),
-      getAllRepoMappings(),
+      fetchGuardrailRepoCount(),
       fetchPendingRegulations(),
     ]);
     setUseCaseCount(ucCount);
     setRegulationCount(regCount);
-    setTemplatesGenerated(Object.keys(mappings).length);
+    setGuardrailCount(grCount);
     setPendingRegulations(pending.rows);
     setTotalPending(pending.total);
   }, []);
@@ -56,7 +50,7 @@ export default function DashboardScreen() {
       <View style={styles.metricsRow}>
         <MetricTile icon={Database} label="Finance Use Cases" value={useCaseCount} tone="success" />
         <MetricTile icon={Scale} label="Regulatory Acts" value={regulationCount} tone="warning" />
-        <MetricTile icon={GitBranchPlus} label="Composite Guardrails" value={templatesGenerated} tone="info" />
+        <MetricTile icon={ShieldCheck} label="Existing Guardrails" value={guardrailCount} tone="info" />
       </View>
 
       <Text style={styles.sectionTitle}>Pending Regulatory Screens</Text>
@@ -64,18 +58,10 @@ export default function DashboardScreen() {
         <Text style={styles.emptyText}>No pending guardrail changes — you're caught up.</Text>
       )}
       {pendingRegulations.map((reg) => (
-        <RegulationCard
-          key={reg.reg_id}
-          item={reg}
-          onPress={() => navigation.navigate("ImpactDiff", { regId: reg.reg_id })}
-        />
+        <RegulationCard key={reg.reg_id} item={reg} />
       ))}
-      {pendingRegulations.length > 0 && (
-        <Text style={styles.reviewHint}>
-          {totalPending > pendingRegulations.length
-            ? `Showing ${pendingRegulations.length} of ${totalPending} pending regulations — open the Audit tab to review the rest.`
-            : "Open the Audit tab to review and dispatch a guardrail update."}
-        </Text>
+      {totalPending > pendingRegulations.length && (
+        <Text style={styles.reviewHint}>Showing {pendingRegulations.length} of {totalPending} pending regulations.</Text>
       )}
     </ScrollView>
   );

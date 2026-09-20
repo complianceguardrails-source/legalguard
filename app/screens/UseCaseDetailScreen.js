@@ -1,15 +1,15 @@
 // One use case in depth: what it is, the risk profile the data actually
-// holds for it, every regulation matched to it, and the guardrail policy
-// the generation service produces for it -- verified with opa before it
-// gets here. Deployment is one more deliberate step, on the Audit screen.
+// holds for it (tier, and the granular risks the tier is made of), every
+// regulation matched to it, and the existing open-source guardrails that
+// control each of those risks -- real repositories, linked, not policy we
+// generate.
 
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions, ActivityIndicator, Linking } from "react-native";
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, Scale, ShieldCheck, Star, ExternalLink, X } from "lucide-react-native";
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, ShieldCheck, Star, ExternalLink, X, Code2, Box } from "lucide-react-native";
 
 import { colors, type, radius } from "../theme";
-import { fetchRegulations } from "../lib/api";
-import { fetchGuardrailPackage } from "../lib/generator";
+import { fetchRegulations, fetchGuardrailRepos } from "../lib/api";
 import { categoryLabel, categoryTone, useCaseTone, sectorLabel, TIER_LABEL } from "../lib/categories";
 import { getDiscoverState, toggleStar, dismiss } from "../lib/discoverState";
 import UseCaseArt from "../components/UseCaseArt";
@@ -32,13 +32,28 @@ export default function UseCaseDetailScreen({ route, navigation }) {
 
   const [regulations, setRegulations] = useState(null);
   const [starred, setStarred] = useState(false);
-  const [pkg, setPkg] = useState(null);
-  const [pkgError, setPkgError] = useState(null);
+  const [repos, setRepos] = useState(null);
 
   useEffect(() => {
     fetchRegulations({ limit: 500 }).then(setRegulations);
+    fetchGuardrailRepos().then(setRepos);
     getDiscoverState().then((s) => setStarred(s.starred.includes(useCase.id)));
   }, [useCase.id]);
+
+  // Existing guardrails for this use case: every stored repository whose
+  // controlled risks overlap the use case's own, grouped by risk in
+  // taxonomy order, most-starred first within a risk. A risk with no
+  // repository is listed as such -- the gap is information.
+  const guardrails = useMemo(() => {
+    const factors = useCase.risk_factors || [];
+    if (!repos || !factors.length) return [];
+    return factors.map((slug) => ({
+      slug,
+      label: RISK_BY_SLUG[slug]?.label || slug,
+      repos: repos.filter((r) => (r.risk_slugs || []).includes(slug)).sort((a, b) => (b.stars || 0) - (a.stars || 0)),
+    }));
+  }, [repos, useCase.risk_factors]);
+  const [guardrailOpen, setGuardrailOpen] = useState(() => new Set());
 
   const matched = useMemo(
     () => (regulations || []).filter((r) => (r.affected_use_case_ids || []).includes(useCase.id)),
@@ -84,19 +99,6 @@ export default function UseCaseDetailScreen({ route, navigation }) {
   const riskCount = (useCase.risk_factors || []).length;
   const toggleGroup = (key) => setOpen((prev) => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
 
-  useEffect(() => {
-    if (!regulations) return;
-    let cancelled = false;
-    setPkg(null);
-    setPkgError(null);
-    fetchGuardrailPackage(useCase, matched)
-      .then((p) => { if (!cancelled) setPkg(p); })
-      .catch((err) => { if (!cancelled) setPkgError(err.message); });
-    return () => { cancelled = true; };
-  }, [regulations, matched, useCase]);
-
-  const rego = pkg?.files?.["policies/rules.rego"] || "";
-  const regoPreview = rego.split("\n").slice(0, 40).join("\n");
   const blurb = (useCase.description || "").startsWith("Hugging Face model") ? null : useCase.description;
   const link = useCase.github_reference_url || (useCase.hf_model_id ? `https://huggingface.co/${useCase.hf_model_id}` : null);
 
@@ -284,30 +286,49 @@ export default function UseCaseDetailScreen({ route, navigation }) {
 
       <View style={styles.section}>
         <View style={styles.h2Row}>
-          <Scale size={16} color={colors.textMain} />
-          <Text style={styles.h2}>Guardrail policy</Text>
+          <ShieldCheck size={16} color={colors.textMain} />
+          <Text style={styles.h2}>Existing guardrails</Text>
         </View>
-        {pkgError ? (
-          <Text style={[styles.muted, { color: colors.danger }]}>{pkgError}</Text>
-        ) : !pkg ? (
-          <Text style={styles.muted}>Generating and verifying with opa…</Text>
+        <Text style={styles.sectionNote}>
+          Open-source controls for each of this system's risks -- real repositories on GitHub and models on the Hugging Face
+          Hub, with their own stars and last activity. A risk with none listed has no known technical control.
+        </Text>
+        {!repos ? (
+          <ActivityIndicator color={colors.primary} />
+        ) : guardrails.length === 0 ? (
+          <Text style={styles.muted}>No granular risks are recorded for this use case yet.</Text>
         ) : (
-          <>
-            <Text style={styles.sectionNote}>
-              Verified with opa {pkg.verification.opa_version}: check passed, {pkg.verification.tests.passed}/
-              {pkg.verification.tests.total} generated tests passing.
-            </Text>
-            <View style={[styles.code, { borderLeftColor: tone }]}>
-              <Text style={styles.codeText}>{regoPreview}{rego.split("\n").length > 40 ? "\n…" : ""}</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.cta}
-              onPress={() => navigation.navigate("ImpactDiff", { useCaseId: useCase.id, handoffAt: Date.now() })}
-              accessibilityRole="button"
-            >
-              <Text style={styles.ctaText}>Review and dispatch in Audit</Text>
-            </TouchableOpacity>
-          </>
+          guardrails.map((g) => {
+            const isOpen = guardrailOpen.has(g.slug);
+            const Chevron = isOpen ? ChevronDown : ChevronRight;
+            return (
+              <View key={g.slug} style={styles.group}>
+                <TouchableOpacity
+                  onPress={() => setGuardrailOpen((prev) => { const n = new Set(prev); n.has(g.slug) ? n.delete(g.slug) : n.add(g.slug); return n; })}
+                  style={styles.groupHead}
+                  disabled={!g.repos.length}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: isOpen }}
+                >
+                  <Chevron size={16} color={g.repos.length ? colors.textMuted : "transparent"} />
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <View style={styles.groupMeta}>
+                      <Text style={styles.groupTitle} numberOfLines={1}>{g.label}</Text>
+                      <Text style={styles.groupCount}>{g.repos.length}</Text>
+                    </View>
+                    <Text style={[styles.groupKind, { color: g.repos.length ? colors.primary : colors.textMuted }]}>
+                      {g.repos.length ? `${g.repos.length} guardrail${g.repos.length === 1 ? "" : "s"}` : "No known technical control"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                {isOpen && (
+                  <View style={styles.groupBody}>
+                    {g.repos.map((r) => <RepoRow key={r.repo_id} repo={r} />)}
+                  </View>
+                )}
+              </View>
+            );
+          })
         )}
       </View>
     </ScrollView>
@@ -331,6 +352,27 @@ export default function UseCaseDetailScreen({ route, navigation }) {
         </View>
       )}
     </View>
+  );
+}
+
+function RepoRow({ repo }) {
+  const Icon = repo.platform === "github" ? Code2 : Box;
+  const meta = [
+    repo.stars != null ? `${repo.stars.toLocaleString()} ${repo.platform === "github" ? "stars" : "likes"}` : null,
+    repo.downloads != null ? `${repo.downloads.toLocaleString()} downloads` : null,
+    repo.language,
+    repo.license,
+    repo.last_pushed_at ? `updated ${new Date(repo.last_pushed_at).toLocaleDateString(undefined, { month: "short", year: "numeric" })}` : null,
+  ].filter(Boolean).join(" · ");
+  return (
+    <TouchableOpacity onPress={() => Linking.openURL(repo.url)} style={styles.repo} accessibilityRole="link">
+      <View style={styles.repoHead}>
+        <Icon size={14} color={colors.textMain} />
+        <Text style={styles.repoName} numberOfLines={1}>{repo.external_id}</Text>
+      </View>
+      {!!repo.description && <Text style={styles.repoDesc} numberOfLines={2}>{repo.description}</Text>}
+      <Text style={styles.repoMeta}>{meta}</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -381,10 +423,11 @@ const styles = StyleSheet.create({
   groupBody: { paddingHorizontal: 12, paddingBottom: 12, gap: 8, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
   callout: { flexDirection: "row", gap: 10, alignItems: "flex-start", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 12 },
   calloutText: { flex: 1, fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMain, lineHeight: 18 },
-  code: { backgroundColor: "#0F1E3D", borderRadius: radius.card, borderLeftWidth: 4, padding: 14 },
-  codeText: { fontFamily: "Courier", fontSize: 11, lineHeight: 16, color: "#E6EDF7" },
-  cta: { backgroundColor: colors.accent, paddingVertical: 13, borderRadius: radius.button, alignItems: "center" },
-  ctaText: { fontFamily: type.fontFamilyBold, fontSize: 14, color: colors.primary },
+  repo: { gap: 4, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  repoHead: { flexDirection: "row", alignItems: "center", gap: 6 },
+  repoName: { flex: 1, fontFamily: type.fontFamilyBold, fontSize: 13, color: colors.textMain },
+  repoDesc: { fontFamily: type.fontFamily, fontSize: 12, color: colors.textMain, lineHeight: 17 },
+  repoMeta: { fontFamily: type.fontFamily, fontSize: 11, color: colors.textMuted },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, flexDirection: "row", gap: 10, padding: 14, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
   footBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 13, borderRadius: radius.button },
   footBtnGhost: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },

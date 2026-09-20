@@ -193,3 +193,24 @@ export async function submitUseCase({
   const [created] = await res.json();
   return created;
 }
+
+// --- Risk-taxonomy feeds (migration 012) -------------------------------
+
+/** Stories from allowlisted financial outlets and regulators that map onto
+ * the risk taxonomy, newest first. Title/summary are the feed's own; the
+ * story is linked, never copied. */
+export async function fetchRiskNews({ limit = 200 } = {}) {
+  return getJson(`/risk_news_stories?select=*&order=published_at.desc.nullslast,fetched_at.desc&limit=${limit}`, []);
+}
+
+/** Open-source guardrail repositories (GitHub) and Hub models mapped to
+ * the granular risks they control, most-starred first. */
+export async function fetchGuardrailRepos({ limit = 500 } = {}) {
+  return getJson(`/guardrail_repos?select=*&order=stars.desc.nullslast&limit=${limit}`, []);
+}
+
+/** Real count of stored guardrail repositories -- the Radar "Existing
+ * Guardrails" tile. */
+export async function fetchGuardrailRepoCount() {
+  return fetchExactCount("/guardrail_repos?select=repo_id&limit=1", 0);
+}

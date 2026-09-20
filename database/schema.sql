@@ -342,3 +342,7 @@ GROUP BY compliance_status;
 -- scoped to just that one table/operation rather than opening writes
 -- broadly.
 -- ---------------------------------------------------------------------------
+
+-- Risk-taxonomy feeds: news stories and guardrail repositories mapped to
+-- risks. See migrations/012_add_risk_news_and_guardrail_repos.sql for the
+-- definitions (applied there verbatim).

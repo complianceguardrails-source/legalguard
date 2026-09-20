@@ -57,7 +57,9 @@ GRANT SELECT ON
     guardrail_regulatory_mapping,
     regulatory_horizon_forecast,
     origin_driver_trend_summary,
-    guardrail_compliance_summary
+    guardrail_compliance_summary,
+    risk_news_stories,
+    guardrail_repos
 TO web_anon;
 ```
 

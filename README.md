@@ -53,59 +53,49 @@ brew install postgrest
 postgrest postgrest.conf   # see docs/POSTGREST.md for the conf contents
 ```
 
-### 4. Guardrail generation service
+### 4. Risk feeds: news and existing guardrails
 
-Generates each use case's guardrail package and verifies it with the real
-`opa` binary before returning it -- `opa check --strict` plus the package's
-own generated test suite. The app never receives a policy that fails its
-own tests, and a rule change ships without an App Store release. Holds no
-credentials; the GitHub push still happens from the app.
+Two nightly feeds map the outside world onto the risk taxonomy
+(`ingestion/risk_taxonomy.py`: seven families, sixty-one granular risks):
 
 ```bash
-cd service
-npm install
-PORT=8787 node server.js        # needs `opa` on PATH
-curl localhost:8787/healthz     # {"ok":true,"opa_version":"1.20.2"}
+cd ingestion
+DATABASE_URL=... python ingest_risk_news.py        # allowlisted outlets + regulators, via RSS
+GITHUB_TOKEN=... DATABASE_URL=... python ingest_guardrail_repos.py   # open-source controls per risk
 ```
 
-`service/Dockerfile` bakes in a pinned, checksum-verified `opa`; `render.yaml`
-deploys it as `legalguard-generator`, live at
-`https://legalguard-generator.onrender.com` (free plan: the first request
-after idle takes ~30 s to wake). The App Store build points at it via
-`EXPO_PUBLIC_GENERATOR_URL` in `app/eas.json`. The adversarial harness also
-lives here: `npm run harness`.
+Stories come only from the outlets and regulators named in
+`sources/risk_news.py` (title + summary from their own feeds, linked out);
+a story is kept when it is about AI and matches a risk's phrases in
+`risk_news_keywords.py`. Guardrail repositories are the curated seeds and
+searches in `guardrail_repo_queries.py`, resolved live against the GitHub
+and Hugging Face APIs so stars, licence and last push are real. Risks with
+no known technical control are reported, not filled.
 
 ### 5. Mobile app
 
 ```bash
 cd app
 npm install
-EXPO_PUBLIC_API_URL=http://localhost:3000 \
-EXPO_PUBLIC_GENERATOR_URL=http://localhost:8787 npx expo start
+EXPO_PUBLIC_API_URL=http://localhost:3000 npx expo start
 ```
 
 Without `EXPO_PUBLIC_API_URL` set, the app runs against bundled mock data
 (`app/lib/mockData.js`) so you can see every screen before any backend is deployed.
-`EXPO_PUBLIC_GENERATOR_URL` has no mock fallback on purpose: an unverified
-policy is the one thing the service exists to prevent, so without it the
-Audit screen says so and dispatch stays disabled.
 
-### 6. Connect GitHub in the app
+Four tabs: **Discover** (category cloud, swipe deck, use-case detail with
+tier, granular risks, regulations and existing guardrails), **Trending**
+(today's stories per risk family), **Radar** (counts and pending
+regulations), **Horizon** (forecasts).
 
-Open the **Dispatch** tab → paste a **classic** [Personal Access Token](https://github.com/settings/tokens/new?scopes=repo,workflow)
-with both `repo` **and** `workflow` scope → set a target repo for whichever
-use cases you want guardrail PRs opened against. Both scopes are required:
-`repo` alone can create the repo and branch, but every generated guardrail
-includes `.github/workflows/compliance_eval.yml`, and GitHub silently
-404s any tree/commit write touching `.github/workflows/` without the
-separate `workflow` scope -- confirmed by direct API testing, since the
-failure mode gives no indication it's scope-related. Use classic, not
-fine-grained: fine-grained tokens return `403 Resource not accessible by
-personal access token` on repo creation unless you separately grant
-"Administration" under Account permissions, which is easy to miss. The
-token is written to the device's
-secure keychain (`expo-secure-store`) and is never sent to the
-Postgres/PostgREST backend.
+### 6. Generation service (optional, not used by the app)
+
+`service/` still holds the opa-verified Rego generation service and its
+adversarial harness (`npm run harness`); `render.yaml` deploys it as
+`legalguard-generator`. The app no longer calls it -- guardrails in the
+product are existing open-source controls mapped to risks -- but the
+service is kept for anyone who wants generated policy from a use case and
+its matched regulations.
 
 ### 7. Ship to the App Store
 
@@ -120,12 +110,13 @@ Developer account.
 
 ```
 database/     Postgres schema + seed data
-ingestion/    Regulation crawler (Federal Register API + RSS) + GitHub
-              use-case miner, dedup, origin-driver & blast-radius taggers
+ingestion/    Regulation crawler (Federal Register, EUR-Lex, legislation.gov.uk,
+              RSS) + GitHub/Hub use-case miner, category/risk/regulation
+              rules, risk-news and guardrail-repo feeds
 .github/      Free nightly (regs) + weekly (use cases) cron workflows
 app/          Expo/React Native mobile app
-service/      Guardrail generation + opa verification service, and the
-              adversarial harness against its generated policies
+service/      Optional opa-verified guardrail generation service and its
+              adversarial harness (not called by the app)
 docs/         Architecture notes and PostgREST setup guide
 ```
 

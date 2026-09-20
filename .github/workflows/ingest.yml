@@ -36,6 +36,34 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python main.py
 
+      - name: Re-derive use-case classification for new regulations
+        # Category and basis rules link every visible use case to the
+        # regulations that reach it; a regulation ingested tonight is linked
+        # here, not by word overlap. Risk factors are recomputed with it.
+        working-directory: ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python link_regulations_by_category.py
+          python tag_risk_factors.py
+
+      - name: Fetch today's AI-risk headlines
+        # Allowlisted outlets and regulators (sources/risk_news.py), mapped
+        # onto the risk taxonomy; the Trending tab reads this table.
+        working-directory: ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python ingest_risk_news.py
+
+      - name: Refresh guardrail repositories
+        # Re-resolves every seed and search (stars, last push, new results).
+        # GITHUB_TOKEN is the workflow's own token: 1,000 req/hour is plenty.
+        working-directory: ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python ingest_guardrail_repos.py
+
       - name: Recompute trend-based Horizon forecasts
         # Runs after ingestion so it sees tonight's newly-classified
         # origin_driver_category values -- real quarter-over-quarter signal

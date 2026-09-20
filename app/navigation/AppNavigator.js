@@ -1,15 +1,13 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Compass, Radar, Database, Scale, Telescope, Rocket } from "lucide-react-native";
+import { Compass, Radar, Telescope, Newspaper } from "lucide-react-native";
 
 import { colors, type } from "../theme";
 import AppHeader from "../components/AppHeader";
 import DashboardScreen from "../screens/DashboardScreen";
-import KnowledgeBaseScreen from "../screens/KnowledgeBaseScreen";
-import ImpactDiffScreen from "../screens/ImpactDiffScreen";
 import HorizonScreen from "../screens/HorizonScreen";
-import GitOpsConsoleScreen from "../screens/GitOpsConsoleScreen";
+import TrendingRisksScreen from "../screens/TrendingRisksScreen";
 import DiscoverScreen from "../screens/DiscoverScreen";
 import DeckScreen from "../screens/DeckScreen";
 import UseCaseDetailScreen from "../screens/UseCaseDetailScreen";
@@ -44,9 +42,11 @@ export default function AppNavigator() {
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
       }}
     >
-      {/* Tab names/labels match Base44's generated app (Radar / Use Cases /
-          Audit / Horizon / Dispatch) so the two front ends read as the same
-          product -- component names stay as-is to avoid unrelated churn. */}
+      {/* Four tabs: Discover (use cases and their risks), Trending (today's
+          stories on those risks), Radar (the numbers), Horizon (forecasts).
+          The Use Cases / Audit / Dispatch tabs -- the opa/Rego generation and
+          GitHub push flow -- were removed when guardrails became "existing
+          open-source controls per risk" rather than generated policy. */}
       <Tab.Screen
         name="DiscoverFlow"
         component={DiscoverFlow}
@@ -54,6 +54,15 @@ export default function AppNavigator() {
           title: "Discover",
           tabBarLabel: "Discover",
           tabBarIcon: ({ color, size }) => <Compass color={color} size={size} />,
+        }}
+      />
+      <Tab.Screen
+        name="Trending"
+        component={TrendingRisksScreen}
+        options={{
+          title: "Trending Risks",
+          tabBarLabel: "Trending",
+          tabBarIcon: ({ color, size }) => <Newspaper color={color} size={size} />,
         }}
       />
       <Tab.Screen
@@ -66,39 +75,12 @@ export default function AppNavigator() {
         }}
       />
       <Tab.Screen
-        name="KnowledgeBase"
-        component={KnowledgeBaseScreen}
-        options={{
-          title: "Use Case Knowledge Base",
-          tabBarLabel: "Use Cases",
-          tabBarIcon: ({ color, size }) => <Database color={color} size={size} />,
-        }}
-      />
-      <Tab.Screen
-        name="ImpactDiff"
-        component={ImpactDiffScreen}
-        options={{
-          title: "Legislative Audit",
-          tabBarLabel: "Audit",
-          tabBarIcon: ({ color, size }) => <Scale color={color} size={size} />,
-        }}
-      />
-      <Tab.Screen
         name="Horizon"
         component={HorizonScreen}
         options={{
           title: "Regulatory Horizon",
           tabBarLabel: "Horizon",
           tabBarIcon: ({ color, size }) => <Telescope color={color} size={size} />,
-        }}
-      />
-      <Tab.Screen
-        name="GitOpsConsole"
-        component={GitOpsConsoleScreen}
-        options={{
-          title: "GitOps Dispatch Console",
-          tabBarLabel: "Dispatch",
-          tabBarIcon: ({ color, size }) => <Rocket color={color} size={size} />,
         }}
       />
     </Tab.Navigator>

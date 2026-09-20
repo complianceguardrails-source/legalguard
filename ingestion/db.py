@@ -803,3 +803,45 @@ def set_risk_factors(conn: psycopg.Connection, use_case_id: str, factors: list[s
             (factors or None, use_case_id),
         )
     conn.commit()
+
+
+def upsert_risk_news_story(conn: psycopg.Connection, story: dict) -> bool:
+    """Inserts a story by URL; an existing URL is left as first seen (a
+    feed's later edit of a title is not a new story). Returns True if new."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO risk_news_stories (url, title, summary, outlet, outlet_kind, published_at, risk_slugs, families, matched_terms)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (url) DO NOTHING
+            """,
+            (story["url"], story["title"], story.get("summary"), story["outlet"], story["outlet_kind"],
+             story.get("published_at"), story["risk_slugs"], story["families"], story["matched_terms"]),
+        )
+        inserted = cur.rowcount == 1
+    conn.commit()
+    return inserted
+
+
+def upsert_guardrail_repo(conn: psycopg.Connection, row: dict) -> None:
+    """One row per platform + id; a re-run refreshes stars, description
+    and the risk mapping in place."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO guardrail_repos
+                (platform, external_id, url, name, description, stars, downloads, language, license,
+                 last_pushed_at, risk_slugs, families, evidence, fetched_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+            ON CONFLICT (platform, external_id) DO UPDATE SET
+                url = EXCLUDED.url, name = EXCLUDED.name, description = EXCLUDED.description,
+                stars = EXCLUDED.stars, downloads = EXCLUDED.downloads, language = EXCLUDED.language,
+                license = EXCLUDED.license, last_pushed_at = EXCLUDED.last_pushed_at,
+                risk_slugs = EXCLUDED.risk_slugs, families = EXCLUDED.families,
+                evidence = EXCLUDED.evidence, fetched_at = now()
+            """,
+            (row["platform"], row["external_id"], row["url"], row["name"], row.get("description"),
+             row.get("stars"), row.get("downloads"), row.get("language"), row.get("license"),
+             row.get("last_pushed_at"), row["risk_slugs"], row["families"], json.dumps(row["evidence"])),
+        )
+    conn.commit()
