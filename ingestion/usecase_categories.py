@@ -184,6 +184,9 @@ def _describing_name(name: str) -> str:
 # (hashgraph/guardian); add to it as more turn up.
 CATEGORY_NEUTRAL_PHRASES: dict[str, list[str]] = {
     "fraud_aml": ["fraud proof", "fraud resistant", "fraud resistance", "fraudproof", "anti fraud proof"],
+    # trade-finance instruments are "credit" in name only; consumer and
+    # corporate lending vocabulary is what credit_lending is for
+    "credit_lending": ["letters of credit", "letter of credit", "documentary credit", "credit note", "credit notes"],
 }
 
 

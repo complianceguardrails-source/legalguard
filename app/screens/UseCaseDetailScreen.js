@@ -17,7 +17,9 @@ import { RISK_FAMILIES, RISK_BY_SLUG } from "../lib/riskTaxonomy";
 import RegulationCard from "../components/RegulationCard";
 import MetadataPill from "../components/MetadataPill";
 
-const SOURCE_LABEL = { github_mined: "Mined from GitHub", huggingface_mined: "Mined from Hugging Face", curated: "Hand-curated", user_submitted: "User-submitted" };
+// Only published provenance is ever shown; any other source renders no
+// provenance line at all rather than a label for it.
+const SOURCE_LABEL = { github_mined: "Published on GitHub", huggingface_mined: "Published on Hugging Face" };
 const GROUP_LABEL = { category: "Because of what it does", basis: "Because of how it was classified", baseline: "Baseline for any AI system in a regulated firm", overlap: "Candidate from text overlap" };
 const GROUP_TONE = { category: colors.primary, basis: "#8A6A16", baseline: colors.textMuted, overlap: colors.textMuted };
 const TIER_VARIANT = { prohibited: "danger", high_risk: "warning", limited_risk: "info", minimal_risk: "success", unclassified: "neutral" };
@@ -139,7 +141,7 @@ export default function UseCaseDetailScreen({ route, navigation }) {
 
       <View style={styles.section}>
         {blurb ? <Text style={styles.body}>{blurb}</Text> : <Text style={styles.muted}>No description is stored for this use case.</Text>}
-        <Text style={styles.provenance}>{SOURCE_LABEL[useCase.source] || useCase.source}</Text>
+        {!!SOURCE_LABEL[useCase.source] && <Text style={styles.provenance}>{SOURCE_LABEL[useCase.source]}</Text>}
         {link && (
           <TouchableOpacity onPress={() => Linking.openURL(link)} style={styles.linkRow}>
             <ExternalLink size={13} color={colors.secondary} />

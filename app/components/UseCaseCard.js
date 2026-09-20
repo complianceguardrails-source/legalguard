@@ -9,7 +9,7 @@ import { type } from "../theme";
 import { categoryLabel, TIER_DOT, TIER_LABEL } from "../lib/categories";
 import UseCaseArt from "./UseCaseArt";
 
-const SOURCE_LABEL = { github_mined: "GitHub", huggingface_mined: "Hugging Face", curated: "Curated", user_submitted: "Submitted" };
+const SOURCE_LABEL = { github_mined: "GitHub", huggingface_mined: "Hugging Face" }; // published provenance only
 
 export default function UseCaseCard({ useCase, width, height, starred, onToggleStar }) {
   const cats = (useCase.categories || []).slice(0, 2);
@@ -46,7 +46,7 @@ export default function UseCaseCard({ useCase, width, height, starred, onToggleS
             <Text style={styles.metaText}>{TIER_LABEL[useCase.risk_tier] || "Unclassified"}</Text>
           </View>
           <Text style={styles.metaText}>
-            {SOURCE_LABEL[useCase.source] || useCase.source} · {(useCase.modality || "").replace("_", " ")}
+            {[SOURCE_LABEL[useCase.source], (useCase.modality || "").replace("_", " ")].filter(Boolean).join(" · ")}
           </Text>
         </View>
       </View>

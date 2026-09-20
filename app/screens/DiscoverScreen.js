@@ -57,8 +57,8 @@ export default function DiscoverScreen({ navigation }) {
           <View style={{ flex: 1 }}>
             <Text style={styles.h1}>What are you building?</Text>
             <Text style={styles.lede}>
-              Pick one or more categories. Each use case below is a real system mined from GitHub or Hugging Face, or
-              curated by hand.
+              Pick one or more categories. Every use case is a real system published on GitHub or the Hugging Face
+              Hub.
             </Text>
           </View>
           <TouchableOpacity

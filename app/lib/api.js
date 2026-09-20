@@ -28,16 +28,20 @@ async function getJson(path, fallback) {
   }
 }
 
+// The app counts and shows only systems that are actually published: mined
+// from a public GitHub repository or the Hugging Face Hub. Hand-curated and
+// user-submitted rows stay in the database (the classification pipeline
+// runs on them too) but are not presented as real-world cases.
+const PUBLISHED_SOURCES = "github_mined,huggingface_mined";
+const PUBLISHED_FILTER = `source=in.(${PUBLISHED_SOURCES})&categories=not.is.null`;
+
 export async function fetchUseCases() {
   // PostgREST auto-exposes tables as REST resources: GET /banking_use_cases.
   // A mined row with no financial category is not shown anywhere in the
   // app: tagging the corpus showed those are overwhelmingly not financial
-  // AI (leaks from bank-org and generic-keyword mining). Curated rows are
-  // human-vetted and always shown. See ingestion/usecase_categories.py.
-  return getJson(
-    "/banking_use_cases?select=*&or=(categories.not.is.null,source.eq.curated)&order=parent_sector",
-    MOCK_USE_CASES
-  );
+  // AI (leaks from bank-org and generic-keyword mining). See
+  // ingestion/usecase_categories.py.
+  return getJson(`/banking_use_cases?select=*&${PUBLISHED_FILTER}&order=parent_sector`, MOCK_USE_CASES);
 }
 
 export async function fetchRegulations({ limit = 20 } = {}) {
@@ -86,10 +90,11 @@ async function fetchExactCount(path, fallbackCount) {
   }
 }
 
-/** Real count of every use case in the shared knowledge base -- the
- * Radar dashboard's "Finance Use Cases" tile. */
+/** Real count of published use cases (GitHub- or Hub-mined, categorised)
+ * -- the Radar dashboard's "Finance Use Cases" tile. Same filter as
+ * fetchUseCases, so the tile matches what Discover offers. */
 export async function fetchUseCaseCount() {
-  return fetchExactCount("/banking_use_cases?select=id&limit=1", MOCK_USE_CASES.length);
+  return fetchExactCount(`/banking_use_cases?select=id&${PUBLISHED_FILTER}&limit=1`, MOCK_USE_CASES.length);
 }
 
 /** Real count of every tracked regulation (every row -- individual

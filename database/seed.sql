@@ -37,6 +37,7 @@ INSERT INTO banking_use_cases (name, parent_sector, modality, description, risk_
 ('Institutional Pitch-book / Prospectus Generation', 'CIB', 'rag_document', 'Synthesizes financial models into client-facing prospectus drafts.', 'high_risk'),
 ('Portfolio Optimization Modeling', 'Wealth Management', 'structured', 'Allocation modeling against client risk mandates.', 'limited_risk'),
 ('Corporate Proxy-Voting Summary Agent', 'CIB', 'rag_document', 'Summarizes proxy statements for institutional voting decisions.', 'limited_risk'),
+('Trade Finance EUDR Due-Diligence Screening', 'CIB', 'rag_document', 'Reads letters of credit, bills of lading and supplier declarations for commodity trade finance (cocoa, coffee, palm oil, soya, timber, cattle, rubber) and checks that each shipment carries a deforestation-free due diligence statement reference and geolocation data before the bank funds it.', 'limited_risk'),
 
 -- Tier 4: Back Office, Risk & Compliance
 ('AML Transaction Monitoring', 'Operations & Risk', 'structured', 'Graph-based anomaly detection for layering/structuring patterns.', 'high_risk'),
