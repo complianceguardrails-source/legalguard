@@ -53,6 +53,11 @@ CREATE TABLE banking_use_cases (
     -- and ingestion/llm_compiler.py.
     llm_compiled_requirement JSONB,
     llm_evidence_text        TEXT,
+    -- Hugging Face model card the row's classification was derived from;
+    -- fetched_at is the attempted marker so gated/absent cards aren't
+    -- retried every run. See database/migrations/007_add_hf_model_card.sql.
+    model_card_text          TEXT,
+    model_card_fetched_at    TIMESTAMPTZ,
     created_at          TIMESTAMPTZ DEFAULT now(),
     updated_at          TIMESTAMPTZ DEFAULT now(),
     UNIQUE (name)

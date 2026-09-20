@@ -44,7 +44,10 @@ _SECTOR_KEYWORDS_RAW = {
         "climate", "biodiversity",
     },
     "Consumer Finance": {
-        "credit", "loan", "lending", "mortgage", "underwrit", "score", "scoring",
+        # "credit score", not bare "score": on ML model cards "score" is a
+        # model or relevance score (a reranker was classified Consumer
+        # Finance on it). "credit" already catches credit-score names.
+        "credit", "loan", "lending", "mortgage", "underwrit", "credit score", "scoring",
         "buy-to-let", "btl", "green loan", "esg loan", "student loan", "payday",
     },
     "Front Office": {
@@ -89,13 +92,24 @@ SECTOR_KEYWORDS = _normalize_keyword_map(_SECTOR_KEYWORDS_RAW)
 MODALITY_KEYWORDS = _normalize_keyword_map(_MODALITY_KEYWORDS_RAW)
 
 
+# Keywords longer than the 4-char rule below that still collide inside
+# common words. "vision" matched "banking & finance division" and "business
+# division" on real model cards -- found once classification moved from
+# 30-char placeholders to card prose (enrich_hf_model_cards.py). Kept as an
+# explicit set rather than raising the length threshold, because most
+# longer keywords are deliberate stems ("underwrit") that a boundary would
+# break. Mirrored in risk_tier_classifier.py.
+_BOUNDARY_KEYWORDS = {"vision"}
+
+
 def _keyword_matches(kw: str, text_lower: str) -> bool:
     # Short keywords (<=4 chars, e.g. "aml", "kyc", "esg", "pii") risk
     # matching as a coincidental substring of an unrelated word -- "aml"
     # inside "seamless" is a real false positive found via hand-validation.
     # Longer phrases are vanishingly unlikely to collide this way, so only
-    # short keywords pay the cost of a regex word-boundary check.
-    if len(kw) <= 4:
+    # short keywords (and the listed exceptions) pay the cost of a regex
+    # word-boundary check.
+    if len(kw) <= 4 or kw in _BOUNDARY_KEYWORDS:
         return re.search(r"\b" + re.escape(kw) + r"\b", text_lower) is not None
     return kw in text_lower
 

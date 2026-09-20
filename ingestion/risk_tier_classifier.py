@@ -61,11 +61,17 @@ def _normalize_keyword_map(keyword_map: dict[str, set[str]]) -> dict[str, set[st
 RISK_KEYWORDS = _normalize_keyword_map(_RISK_KEYWORDS_RAW)
 
 
+# Mirrors usecase_classifier._BOUNDARY_KEYWORDS -- longer keywords known
+# to collide inside common words ("vision" in "division"). Keep the two
+# sets identical.
+_BOUNDARY_KEYWORDS = {"vision"}
+
+
 def _keyword_matches(kw: str, text_lower: str) -> bool:
     # Same short-keyword collision risk as usecase_classifier.py -- "aml"
     # (anti-money-laundering) matched inside "seamless" as a real false
     # positive found via hand-validation (jpmorganchase/dataquery-sdk).
-    if len(kw) <= 4:
+    if len(kw) <= 4 or kw in _BOUNDARY_KEYWORDS:
         return re.search(r"\b" + re.escape(kw) + r"\b", text_lower) is not None
     return kw in text_lower
 

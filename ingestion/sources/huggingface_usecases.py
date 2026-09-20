@@ -134,15 +134,56 @@ _QUANT_TAGS = {"gguf", "gptq", "awq", "exl2", "mlx"}
 # Real, documented Hugging Face pipeline_tag values
 # (https://huggingface.co/docs/hub/models-tasks) mapped to the three model-
 # modality labels. Anything not covered here (image/audio pipeline tags,
-# or no pipeline_tag at all) falls through to the library_name fallback,
-# then to NULL -- never guessed from the model name alone.
+# or no pipeline_tag at all) falls through the declared-metadata fallbacks
+# below, then to NULL -- never guessed from the model name alone.
 _DECODER_TAGS = {"text-generation", "text2text-generation", "conversational"}
 _ENCODER_TAGS = {"text-classification", "feature-extraction", "sentence-similarity", "fill-mask"}
 _TABULAR_TAGS = {"tabular-classification", "tabular-regression"}
 _TABULAR_LIBRARIES = {"sklearn", "xgboost", "lightgbm", "catboost"}
 
+# Architecture families, matched as substrings of an uploader-declared
+# base_model id (card frontmatter, surfaced by the API as cardData.base_model).
+# A fine-tune of Llama with no pipeline_tag is still a decoder-only model;
+# the uploader has said so, just in a different field. Kept to families
+# whose architecture is unambiguous.
+_DECODER_FAMILIES = (
+    "llama", "qwen", "mistral", "mixtral", "gemma", "phi-", "phi3", "phi2", "bloom", "falcon",
+    "gpt2", "gpt-neo", "gptj", "gpt-j", "opt-", "deepseek", "granite", "smollm", "yi-", "internlm",
+    "baichuan", "chatglm", "tinyllama", "olmo", "pythia", "stablelm", "starcoder", "codellama",
+)
+_ENCODER_FAMILIES = (
+    "bert", "roberta", "deberta", "distilbert", "electra", "albert", "modernbert", "bge-", "e5-",
+    "minilm", "mpnet", "xlm-r", "longformer", "bigbird",
+)
 
-def derive_model_modality(pipeline_tag: str | None, library_name: str | None) -> str | None:
+MODEL_CARD_MAX_CHARS = 12000
+MODEL_CARD_URL = "https://huggingface.co/{model_id}/raw/main/README.md"
+MODEL_API_URL = "https://huggingface.co/api/models/{model_id}"
+
+
+def _family_modality(base_model: str | None) -> str | None:
+    if not base_model:
+        return None
+    lowered = base_model.lower()
+    if any(f in lowered for f in _DECODER_FAMILIES):
+        return "decoder-only"
+    if any(f in lowered for f in _ENCODER_FAMILIES):
+        return "encoder-only"
+    return None
+
+
+def derive_model_modality(
+    pipeline_tag: str | None,
+    library_name: str | None,
+    tags: Iterable[str] = (),
+    base_model: str | None = None,
+) -> str | None:
+    """Declared metadata only, in order of directness: the pipeline_tag
+    field; a pipeline name present in the tag list when the field itself
+    is unset (the Hub surfaces it both ways, not always consistently); the
+    library; the declared base model's architecture family."""
+    if pipeline_tag is None:
+        pipeline_tag = next((t for t in tags if t in _DECODER_TAGS | _ENCODER_TAGS | _TABULAR_TAGS), None)
     if pipeline_tag in _DECODER_TAGS:
         return "decoder-only"
     if pipeline_tag in _ENCODER_TAGS:
@@ -151,7 +192,7 @@ def derive_model_modality(pipeline_tag: str | None, library_name: str | None) ->
         return "tabular-regressor"
     if library_name in _TABULAR_LIBRARIES:
         return "tabular-regressor"
-    return None
+    return _family_modality(base_model)
 
 
 _HEADERS = {"User-Agent": "LegalGuard-UseCaseMiner/1.0"}
@@ -180,6 +221,89 @@ def search_models(query: str, limit: int = 15) -> list[dict]:
     return _list_models({"search": query, "limit": limit}, max_items=limit)
 
 
+def fetch_model_metadata(model_id: str) -> dict:
+    """The single-model endpoint. Unlike the list endpoint it returns
+    cardData (the card's parsed frontmatter) and the gated flag, and it
+    still answers for gated models -- only the README body is withheld."""
+    resp = requests.get(MODEL_API_URL.format(model_id=model_id), headers=_HEADERS, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def fetch_model_card(model_id: str) -> tuple[str | None, int]:
+    """(card text, HTTP status). None with 401/403 is a gated model, None
+    with 404 is a model that has no card -- both are real, distinct
+    outcomes the caller records rather than retries."""
+    resp = requests.get(MODEL_CARD_URL.format(model_id=model_id), headers=_HEADERS, timeout=30)
+    if resp.status_code in (401, 403, 404):
+        return None, resp.status_code
+    resp.raise_for_status()
+    return resp.text[:MODEL_CARD_MAX_CHARS], resp.status_code
+
+
+def declared_base_model(card_data: dict | None) -> str | None:
+    value = (card_data or {}).get("base_model")
+    if isinstance(value, list):
+        value = value[0] if value else None
+    return value if isinstance(value, str) else None
+
+
+_FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.DOTALL)
+_CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_MD_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+_MD_LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+_MARKUP_LINE_RE = re.compile(r"^\s*(#|\||---|\*\*\*|https?://)")
+
+CARD_PROSE_CHARS = 800
+
+
+def card_prose_paragraphs(card_text: str) -> list[str]:
+    """Prose paragraphs of a model card, in order, with everything that is
+    not a sentence about the model removed: frontmatter, fenced code (which
+    is where usage and instruction-tuning examples live), HTML, images,
+    badges, tables, headings, bare URLs. Markdown link text is kept."""
+    body = _FRONTMATTER_RE.sub("", card_text, count=1)
+    body = _CODE_BLOCK_RE.sub("", body)
+    body = _MD_IMAGE_RE.sub("", body)
+    body = _MD_LINK_RE.sub(r"\1", body)
+    body = _HTML_TAG_RE.sub("", body)
+    paragraphs = []
+    for block in re.split(r"\n\s*\n", body):
+        lines = [ln.strip() for ln in block.strip().splitlines()]
+        prose = [ln for ln in lines if ln and not _MARKUP_LINE_RE.match(ln)]
+        if prose:
+            paragraphs.append(" ".join(prose))
+    return paragraphs
+
+
+def card_prose_head(card_text: str, max_chars: int = CARD_PROSE_CHARS) -> str:
+    """The opening prose of a card, for classification. A card's first
+    paragraphs say what the model is; what follows is training detail,
+    usage examples and citations, and classifying on all of it tripped
+    sector keywords from sample inputs (a LOAN AND SECURITY AGREEMENT used
+    as an instruction-tuning example) and a modality keyword inside an
+    unrelated longer word ("business division" -> "vision")."""
+    out: list[str] = []
+    total = 0
+    for para in card_prose_paragraphs(card_text):
+        out.append(para)
+        total += len(para)
+        if total >= max_chars:
+            break
+    return " ".join(out)[:max_chars]
+
+
+def card_excerpt(card_text: str, max_chars: int = 300) -> str | None:
+    """First substantial prose paragraph, for the app's use-case list.
+    None if there isn't one, so the caller keeps its existing description."""
+    for text in card_prose_paragraphs(card_text):
+        if len(text) < 40:
+            continue
+        return text if len(text) <= max_chars else text[: max_chars - 1].rstrip() + "…"
+    return None
+
+
 def is_quant_reupload(model: dict) -> bool:
     if _QUANT_ID_RE.search(model.get("id", "")):
         return True
@@ -198,7 +322,7 @@ def _to_candidate(model: dict, matched_query: str) -> dict:
         "risk_tier": classify_risk_tier(model_id, description, tags),
         "description": description,
         "hf_model_id": model_id,
-        "model_modality": derive_model_modality(model.get("pipeline_tag"), model.get("library_name")),
+        "model_modality": derive_model_modality(model.get("pipeline_tag"), model.get("library_name"), tags),
         "matched_query": matched_query,
         "likes": model.get("likes", 0),
     }

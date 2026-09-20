@@ -623,3 +623,62 @@ def store_llm_extraction(conn: psycopg.Connection, use_case_id: str, extraction:
             "UPDATE banking_use_cases SET llm_compiled_requirement = %s, llm_evidence_text = %s WHERE id = %s",
             (_json.dumps(extraction) if extraction else None, evidence_text, use_case_id),
         )
+
+
+def fetch_hf_use_cases_needing_model_card(conn: psycopg.Connection, limit: Optional[int] = None) -> list[dict]:
+    """HF-mined use cases whose model card has never been fetched.
+    model_card_fetched_at IS NULL is the "attempted" marker -- set on every
+    attempt regardless of outcome (see set_hf_model_card_enrichment), so a
+    gated or card-less model is recorded once rather than retried on every
+    run. Returns the current classification alongside, so the runner can
+    report what actually changed."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, name, hf_model_id, description, parent_sector, modality, risk_tier, model_modality "
+            "FROM banking_use_cases "
+            "WHERE source = 'huggingface_mined' AND hf_model_id IS NOT NULL "
+            "AND model_card_fetched_at IS NULL "
+            "ORDER BY id" + (" LIMIT %s" if limit else ""),
+            (limit,) if limit else (),
+        )
+        cols = [d.name for d in cur.description]
+        rows = []
+        for row in cur.fetchall():
+            record = dict(zip(cols, row))
+            for key in ("name", "hf_model_id", "description", "parent_sector", "modality", "risk_tier", "model_modality"):
+                if isinstance(record.get(key), (bytes, bytearray)):
+                    record[key] = record[key].decode("utf-8")
+            rows.append(record)
+        return rows
+
+
+def set_hf_model_card_enrichment(
+    conn: psycopg.Connection,
+    use_case_id: str,
+    *,
+    card_text: Optional[str],
+    description: Optional[str],
+    parent_sector: str,
+    modality: str,
+    risk_tier: str,
+    model_modality: Optional[str],
+) -> None:
+    """Writes the fetched card (or NULL) and every field re-derived from
+    it in one statement, and stamps model_card_fetched_at either way so the
+    attempt is never repeated. description None keeps the existing value --
+    the caller passes None when no card prose was available to replace the
+    mining-time placeholder with. data_interception_state is re-derived
+    here from the new modality, as upsert_mined_use_case derives it at
+    insert: a modality that changes on re-classification must carry its
+    derived column with it, or the two silently disagree."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE banking_use_cases SET "
+            "model_card_text = %s, model_card_fetched_at = now(), "
+            "description = COALESCE(%s, description), "
+            "parent_sector = %s, modality = %s, risk_tier = %s, model_modality = %s, "
+            "data_interception_state = %s, updated_at = now() "
+            "WHERE id = %s",
+            (card_text, description, parent_sector, modality, risk_tier, model_modality,
+             derive_data_interception_state(modality), use_case_id),
+        )
