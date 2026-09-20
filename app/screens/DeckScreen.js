@@ -32,6 +32,11 @@ export default function DeckScreen({ route, navigation }) {
 
   const [all, setAll] = useState(null);
   const [state, setState] = useState({ starred: [], dismissed: [] });
+  // Cards whose detail has been opened this session. They go to the back
+  // of the deck, so coming back from a detail lands on the next card
+  // instead of the one just read. Not persisted: it's reading order, not
+  // a decision about the use case.
+  const [seen, setSeen] = useState([]);
   const pan = useRef(new Animated.ValueXY()).current;
 
   useEffect(() => {
@@ -47,11 +52,15 @@ export default function DeckScreen({ route, navigation }) {
     if (!all) return [];
     const starred = new Set(state.starred);
     const dismissed = new Set(state.dismissed);
-    if (mode === "starred") return all.filter((uc) => starred.has(uc.id));
-    return all.filter(
-      (uc) => !dismissed.has(uc.id) && (slugs.length === 0 || (uc.categories || []).some((s) => slugs.includes(s)))
-    );
-  }, [all, state, slugs, mode]);
+    const pool =
+      mode === "starred"
+        ? all.filter((uc) => starred.has(uc.id))
+        : all.filter(
+            (uc) => !dismissed.has(uc.id) && (slugs.length === 0 || (uc.categories || []).some((s) => slugs.includes(s)))
+          );
+    const seenSet = new Set(seen);
+    return [...pool.filter((uc) => !seenSet.has(uc.id)), ...pool.filter((uc) => seenSet.has(uc.id))];
+  }, [all, state, slugs, mode, seen]);
 
   // The deck itself shrinks as cards are dismissed, so the top card is
   // always the first one; no cursor to keep in sync.
@@ -78,9 +87,11 @@ export default function DeckScreen({ route, navigation }) {
   };
   const onDetail = () => {
     if (!current) return;
-    // The card comes back: opening detail is a look, not a decision.
+    // Opening detail is a look, not a decision: the card isn't dismissed,
+    // it just moves to the back so the deck has advanced when you return.
     settle();
-    navigation.navigate("UseCaseDetail", { useCase: current });
+    setSeen((ids) => (ids.includes(current.id) ? ids : [...ids, current.id]));
+    navigation.navigate("UseCaseDetail", { useCase: current, fromDeck: true });
   };
 
   const responder = useMemo(
@@ -102,7 +113,7 @@ export default function DeckScreen({ route, navigation }) {
         onPanResponderTerminate: settle,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [current?.id, mode]
+    [current?.id, mode, seen]
   );
 
   const onStar = async () => {
@@ -120,7 +131,7 @@ export default function DeckScreen({ route, navigation }) {
           <ArrowLeft size={20} color={colors.textMain} />
         </TouchableOpacity>
         <Text style={styles.topTitle} numberOfLines={1}>{title}</Text>
-        <Text style={styles.counter}>{all ? `${deck.length} left` : ""}</Text>
+        <Text style={styles.counter}>{all ? `${deck.length} left${seen.length ? ` · ${seen.length} read` : ""}` : ""}</Text>
       </View>
 
       {!all ? (

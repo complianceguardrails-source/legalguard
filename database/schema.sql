@@ -62,6 +62,13 @@ CREATE TABLE banking_use_cases (
     -- (who would own it). NULL = no financial category matched and the
     -- app hides the row. See database/migrations/008_add_use_case_categories.sql.
     categories               TEXT[],
+    -- Why risk_tier is what it is: the matched phrases and the legal basis
+    -- for each. See database/migrations/009_add_risk_basis.sql. NULL when the
+    -- tier can't be reproduced from stored text, or the row is unclassified.
+    risk_basis               JSONB,
+    -- Which regulations reach this use case and why (rule id, kind, why,
+    -- reg_ids). See migrations/010_add_regulation_basis.sql.
+    regulation_basis         JSONB,
     created_at          TIMESTAMPTZ DEFAULT now(),
     updated_at          TIMESTAMPTZ DEFAULT now(),
     UNIQUE (name)

@@ -77,3 +77,23 @@ export const TIER_LABEL = {
   minimal_risk: "Minimal risk",
   unclassified: "Unclassified",
 };
+
+// parent_sector is stored as a short internal code ("CIB", "Front Office")
+// and keyed that way by the generator's sector thresholds, so the code
+// stays in the data; this is only what a person sees. "Uncategorized" is
+// the ingestion default for anything not placed in a bank -- it carries no
+// information, so it shows as nothing rather than as a label.
+const SECTOR_LABEL = {
+  CIB: "Corporate & investment banking",
+  "Front Office": "Front office",
+  "Consumer Finance": "Consumer finance",
+  Insurance: "Insurance",
+  "Operations & Risk": "Operations & risk",
+  "Climate & Sustainable Finance": "Climate & sustainable finance",
+  "Wealth Management": "Wealth management",
+};
+
+export function sectorLabel(code) {
+  if (!code || code === "Uncategorized") return null;
+  return SECTOR_LABEL[code] || code;
+}

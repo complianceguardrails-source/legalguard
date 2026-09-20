@@ -1,0 +1,12 @@
+-- Which regulations reach this use case and why. Links used to be made
+-- only from the regulation side (word overlap, top 5 per regulation, at
+-- ingestion time), which left 93% of use cases with none. They are now
+-- made from the use case side by ingestion/category_regulation_map.py --
+-- by category, by the risk classifier's stated basis, and a baseline for
+-- any AI system in a regulated firm -- and this records the working:
+--   [{"rule": <rule id>, "kind": category|basis|baseline, "why": <text>,
+--     "reg_ids": [<uuid>...]}]
+-- specific_regulations.affected_use_case_ids stays the read path for the
+-- app and the generator; ingestion/link_regulations_by_category.py keeps
+-- it equal to (word-overlap links) UNION (links recorded here).
+ALTER TABLE banking_use_cases ADD COLUMN IF NOT EXISTS regulation_basis JSONB;

@@ -8,6 +8,7 @@ just psycopg3 with explicit SQL, since the schema is small and stable.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from contextlib import contextmanager
 from typing import Iterator, Optional
@@ -713,3 +714,63 @@ def set_use_case_categories(conn: psycopg.Connection, use_case_id: str, categori
             "UPDATE banking_use_cases SET categories = %s, updated_at = now() WHERE id = %s",
             (categories or None, use_case_id),
         )
+
+
+def fetch_use_cases_for_risk_basis(conn: psycopg.Connection) -> list[dict]:
+    """Every use case with a risk tier, plus the text the tier was (or
+    could have been) derived from. Repo topics / Hub tags were never
+    stored, so the backfill can only reproduce tiers the stored text
+    supports on its own."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, name, description, source, risk_tier, risk_basis, model_card_text "
+            "FROM banking_use_cases WHERE risk_tier <> 'unclassified' ORDER BY name"
+        )
+        cols = [d.name for d in cur.description]
+        rows = []
+        for row in cur.fetchall():
+            record = dict(zip(cols, row))
+            for key in ("name", "description", "model_card_text"):
+                if isinstance(record.get(key), (bytes, bytearray)):
+                    record[key] = record[key].decode("utf-8")
+            rows.append(record)
+        return rows
+
+
+def set_risk_basis(conn: psycopg.Connection, use_case_id: str, basis: dict | None) -> None:
+    """Writes the risk tier's working (see migrations/009). None clears it."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE banking_use_cases SET risk_basis = %s, updated_at = now() WHERE id = %s",
+            (json.dumps(basis) if basis is not None else None, use_case_id),
+        )
+    conn.commit()
+
+
+def fetch_visible_use_cases_for_linking(conn: psycopg.Connection) -> list[dict]:
+    """The use cases the app shows (categorised, or curated), with what the
+    category-regulation rules read: categories, risk_basis, source, and
+    the previous regulation_basis so a re-run can undo its own links."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, name, source, categories, risk_tier, risk_basis, regulation_basis "
+            "FROM banking_use_cases WHERE categories IS NOT NULL OR source = 'curated' ORDER BY name"
+        )
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+def fetch_regulation_ids_by_clause(conn: psycopg.Connection) -> list[tuple[str, str, list[str]]]:
+    """(reg_id, clause_identifier, affected_use_case_ids) for every regulation."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT reg_id, clause_identifier, COALESCE(affected_use_case_ids, '{}') FROM specific_regulations")
+        return [(str(r[0]), r[1], [str(u) for u in r[2]]) for r in cur.fetchall()]
+
+
+def set_regulation_basis(conn: psycopg.Connection, use_case_id: str, basis: list[dict] | None) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE banking_use_cases SET regulation_basis = %s, updated_at = now() WHERE id = %s",
+            (json.dumps(basis) if basis else None, use_case_id),
+        )
+    conn.commit()

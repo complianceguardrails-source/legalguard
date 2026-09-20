@@ -4,6 +4,7 @@ import { Code2, FolderPlus, RefreshCw, Scale, GitBranchPlus, ExternalLink, Brain
 
 import { colors, type, radius } from "../theme";
 import { fetchRegulations, fetchUseCases, fetchAdminReferenceGuardrails } from "../lib/api";
+import { sectorLabel } from "../lib/categories";
 import { getGitHubCredentials } from "../lib/auth";
 import { getAllRepoMappings, setRepoMapping } from "../lib/repoMapping";
 import { initializeGuardrailRepo, updateGuardrailRepo, getFileContent } from "../lib/githubClient";
@@ -55,7 +56,7 @@ export default function ImpactDiffScreen({ route }) {
   const [generationError, setGenerationError] = useState(null);
 
   useEffect(() => {
-    fetchRegulations({ limit: 200 }).then(setRegulations);
+    fetchRegulations({ limit: 500 }).then(setRegulations);
     fetchUseCases().then(setUseCases);
     getAllRepoMappings().then(setMappings);
     fetchAdminReferenceGuardrails().then((rows) => {
@@ -355,7 +356,7 @@ export default function ImpactDiffScreen({ route }) {
         </View>
 
         <View style={styles.blueprintBox}>
-          <Text style={styles.diffHeader}>Blueprint of controls -- {selectedUseCase.parent_sector || "Uncategorized"}</Text>
+          <Text style={styles.diffHeader}>Blueprint of controls{sectorLabel(selectedUseCase.parent_sector) ? ` -- ${sectorLabel(selectedUseCase.parent_sector)}` : ""}</Text>
           <Text style={styles.blueprintIntro}>
             What dispatching will actually bundle into this use case's single guardrail repo: real, citable
             thresholds where one exists, an explicit TODO where it doesn't (see service/lib/guardrailThresholds.js --
@@ -520,7 +521,7 @@ function UseCaseListCard({ item, policyCount, hasRepo, selected, onPress }) {
             {item.name}
           </Text>
           <Text style={styles.ucMeta} numberOfLines={1}>
-            {item.parent_sector || "Uncategorized"} · {(item.modality || "").replace("_", " ")}
+            {[sectorLabel(item.parent_sector), (item.modality || "").replace("_", " ")].filter(Boolean).join(" · ")}
           </Text>
         </View>
       </View>

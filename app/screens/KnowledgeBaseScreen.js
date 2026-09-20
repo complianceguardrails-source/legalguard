@@ -9,6 +9,7 @@ import { matchRegulationsForUseCase } from "../lib/tagger";
 import { deriveRiskTier } from "../lib/riskTierHeuristic";
 import { COUNTRIES, EU_OPTION, OTHER_OPTION, expandJurisdictionCodes } from "../lib/countries";
 import { MODALITY_ICON, RISK_TIER_STYLE } from "../lib/useCaseDisplay";
+import { sectorLabel } from "../lib/categories";
 import MetadataPill from "../components/MetadataPill";
 
 const SECTOR_OPTIONS = [
@@ -469,7 +470,7 @@ function UseCaseCard({ useCase }) {
         </View>
         <View style={{ flexDirection: "row", gap: 6 }}>
           {useCase.source === "user_submitted" && <MetadataPill label="YOURS" variant="warning" />}
-          <MetadataPill label={useCase.parent_sector} variant="info" />
+          {!!sectorLabel(useCase.parent_sector) && <MetadataPill label={sectorLabel(useCase.parent_sector)} variant="info" />}
         </View>
       </View>
       <Text style={styles.cardTitle}>{useCase.name}</Text>
