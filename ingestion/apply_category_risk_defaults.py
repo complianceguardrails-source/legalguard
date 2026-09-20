@@ -1,0 +1,50 @@
+"""
+Tier every still-unclassified, categorised use case. The row's own text
+is tried first (explain_risk_tier, so a keyword added later is picked up
+on the next run); only when no phrase matches does the category default
+(risk_tier_classifier.CATEGORY_DEFAULT_TIER) apply, stored with a basis
+that says it is a default and not a phrase match. Rows already tiered
+are never touched. Re-run after resetting category-default rows when the
+defaults change.
+
+    python apply_category_risk_defaults.py [--dry-run]
+"""
+from __future__ import annotations
+
+import argparse
+import logging
+from collections import Counter
+
+import db
+from backfill_risk_basis import evidence_for
+from risk_tier_classifier import default_risk_for_categories, explain_risk_tier
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("legalguard.category_risk_defaults")
+
+
+def run(dry_run: bool) -> None:
+    outcomes: Counter[str] = Counter()
+    with db.get_conn() as conn:
+        rows = db.fetch_unclassified_categorised_use_cases(conn)
+        logger.info("%d unclassified use case(s) with categories", len(rows))
+        for row in rows:
+            explained = explain_risk_tier(row["name"], evidence_for(row), [])
+            how = "phrase"
+            if not explained:
+                explained = default_risk_for_categories(row["categories"])
+                how = "default"
+            if not explained:
+                outcomes["no_default"] += 1
+                continue
+            outcomes[f"{explained['tier']}:{how}"] += 1
+            if not dry_run:
+                db.update_risk_tier(conn, row["id"], explained["tier"])
+                db.set_risk_basis(conn, row["id"], explained)
+    logger.info("Outcomes: %s", dict(outcomes))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dry-run", action="store_true")
+    run(parser.parse_args().dry_run)

@@ -1,5 +1,5 @@
-// The deck: one use case at a time as a swipe card. Swipe one way to
-// dismiss it, the other way to open its detail; star it from the card.
+// The deck: one use case at a time as a swipe card. Swipe one way to open
+// its detail, the other way to move on to the next; star it from the card.
 // No gesture on this screen ever deploys anything -- deployment stays a
 // deliberate action on the Audit screen, behind the detail view.
 //
@@ -10,18 +10,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, Animated, PanResponder, TouchableOpacity, useWindowDimensions, ActivityIndicator } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { ArrowLeft, RotateCcw, X, Search } from "lucide-react-native";
+import { ArrowLeft, RotateCcw, Search, ChevronRight } from "lucide-react-native";
 
 import { colors, type, radius } from "../theme";
 import { fetchUseCases } from "../lib/api";
 import { categoryLabel } from "../lib/categories";
-import { getDiscoverState, toggleStar, dismiss, clearDismissed } from "../lib/discoverState";
+import { getDiscoverState, toggleStar, clearDismissed } from "../lib/discoverState";
 import UseCaseCard from "../components/UseCaseCard";
 
-// The one place the mapping lives. As specified: right dismisses, left
-// digs deeper. Flip these two if that ever changes.
-const SWIPE = { dismiss: "right", detail: "left" };
-const THRESHOLD = 110; // px of horizontal travel that commits a swipe
+// The one place the mapping lives. As specified: left digs deeper, right
+// moves on to the next card. Nothing on this screen dismisses; that is a
+// deliberate button on the detail screen. Flip these if that ever changes.
+const SWIPE = { detail: "left", next: "right" };
+const THRESHOLD = 110; // px of travel that commits a swipe
 const FLING_MS = 220;
 
 export default function DeckScreen({ route, navigation }) {
@@ -32,11 +33,9 @@ export default function DeckScreen({ route, navigation }) {
 
   const [all, setAll] = useState(null);
   const [state, setState] = useState({ starred: [], dismissed: [] });
-  // Cards whose detail has been opened this session. They go to the back
-  // of the deck, so coming back from a detail lands on the next card
-  // instead of the one just read. Not persisted: it's reading order, not
-  // a decision about the use case.
-  const [seen, setSeen] = useState([]);
+  // Where you are in the deck. Down/up move it; dismiss removes the card
+  // under it so the next one slides into place. Session-only.
+  const [index, setIndex] = useState(0);
   const pan = useRef(new Animated.ValueXY()).current;
 
   useEffect(() => {
@@ -58,41 +57,46 @@ export default function DeckScreen({ route, navigation }) {
         : all.filter(
             (uc) => !dismissed.has(uc.id) && (slugs.length === 0 || (uc.categories || []).some((s) => slugs.includes(s)))
           );
-    const seenSet = new Set(seen);
-    return [...pool.filter((uc) => !seenSet.has(uc.id)), ...pool.filter((uc) => seenSet.has(uc.id))];
-  }, [all, state, slugs, mode, seen]);
+    return pool;
+  }, [all, state, slugs, mode]);
 
-  // The deck itself shrinks as cards are dismissed, so the top card is
-  // always the first one; no cursor to keep in sync.
-  const current = deck[0];
-  const next = deck[1];
+  // Dismissing the last card, or the pool shrinking under a stale cursor,
+  // must never leave the cursor past the end.
+  const at = Math.min(index, Math.max(deck.length - 1, 0));
+  const current = deck[at];
+  // Past the last card the deck wraps to the first, so browsing never
+  // dead-ends; the hint says so before you let go.
+  const nextAt = at + 1 < deck.length ? at + 1 : 0;
+  const next = deck.length > 1 ? deck[nextAt] : undefined;
+  const wraps = deck.length > 1 && at + 1 >= deck.length;
+
+  // Arriving back from the detail's "Next card" button.
+  useEffect(() => {
+    if (route.params?.advance) setIndex((i) => (i + 1 < deck.length ? i + 1 : 0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.params?.advance]);
 
   const rotate = pan.x.interpolate({ inputRange: [-width, 0, width], outputRange: ["-12deg", "0deg", "12deg"] });
-  const dismissHint = pan.x.interpolate({ inputRange: SWIPE.dismiss === "right" ? [0, THRESHOLD] : [-THRESHOLD, 0], outputRange: SWIPE.dismiss === "right" ? [0, 1] : [1, 0], extrapolate: "clamp" });
-  const detailHint = pan.x.interpolate({ inputRange: SWIPE.detail === "left" ? [-THRESHOLD, 0] : [0, THRESHOLD], outputRange: SWIPE.detail === "left" ? [1, 0] : [0, 1], extrapolate: "clamp" });
+  const hintFor = (dir) =>
+    pan.x.interpolate({ inputRange: dir === "right" ? [0, THRESHOLD] : [-THRESHOLD, 0], outputRange: dir === "right" ? [0, 1] : [1, 0], extrapolate: "clamp" });
+  const detailHint = hintFor(SWIPE.detail);
+  const nextHint = hintFor(SWIPE.next);
 
   const settle = () => Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false, friction: 6 }).start();
+  const OFF = { right: { x: width * 1.2, y: 0 }, left: { x: -width * 1.2, y: 0 } };
   const fling = (dir, then) =>
-    Animated.timing(pan, { toValue: { x: dir === "right" ? width * 1.2 : -width * 1.2, y: 0 }, duration: FLING_MS, useNativeDriver: false }).start(() => {
+    Animated.timing(pan, { toValue: OFF[dir], duration: FLING_MS, useNativeDriver: false }).start(() => {
       pan.setValue({ x: 0, y: 0 });
       then();
     });
 
-  const onDismiss = () => {
-    if (!current) return;
-    fling(SWIPE.dismiss, async () => {
-      if (mode !== "starred") await dismiss(current.id);
-      setState((s) => ({ ...s, dismissed: [...s.dismissed, current.id] }));
-    });
-  };
   const onDetail = () => {
     if (!current) return;
-    // Opening detail is a look, not a decision: the card isn't dismissed,
-    // it just moves to the back so the deck has advanced when you return.
+    // Opening detail is a look, not a decision: the card stays where it is.
     settle();
-    setSeen((ids) => (ids.includes(current.id) ? ids : [...ids, current.id]));
     navigation.navigate("UseCaseDetail", { useCase: current, fromDeck: true });
   };
+  const onNext = () => (deck.length > 1 ? fling(SWIPE.next, () => setIndex(nextAt)) : settle());
 
   const responder = useMemo(
     () =>
@@ -106,14 +110,14 @@ export default function DeckScreen({ route, navigation }) {
         onPanResponderTerminationRequest: () => false,
         onPanResponderRelease: (_, g) => {
           const dir = g.dx > THRESHOLD ? "right" : g.dx < -THRESHOLD ? "left" : null;
-          if (dir === SWIPE.dismiss) onDismiss();
-          else if (dir === SWIPE.detail) onDetail();
+          if (dir === SWIPE.detail) onDetail();
+          else if (dir === SWIPE.next) onNext();
           else settle();
         },
         onPanResponderTerminate: settle,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [current?.id, mode, seen]
+    [current?.id, mode, at, deck.length]
   );
 
   const onStar = async () => {
@@ -131,7 +135,7 @@ export default function DeckScreen({ route, navigation }) {
           <ArrowLeft size={20} color={colors.textMain} />
         </TouchableOpacity>
         <Text style={styles.topTitle} numberOfLines={1}>{title}</Text>
-        <Text style={styles.counter}>{all ? `${deck.length} left${seen.length ? ` · ${seen.length} read` : ""}` : ""}</Text>
+        <Text style={styles.counter}>{all && current ? `${at + 1} of ${deck.length}` : ""}</Text>
       </View>
 
       {!all ? (
@@ -142,7 +146,7 @@ export default function DeckScreen({ route, navigation }) {
           <Text style={styles.emptyText}>
             {mode === "starred"
               ? "Star a use case from any card and it will collect here."
-              : `${state.dismissed.length} dismissed on this device. They aren't deleted -- they're still in Use Cases and Audit.`}
+              : `${state.dismissed.length} dismissed on this device from their detail pages. They aren't deleted -- they're still in Use Cases and Audit.`}
           </Text>
           {mode !== "starred" && state.dismissed.length > 0 && (
             <TouchableOpacity
@@ -166,8 +170,8 @@ export default function DeckScreen({ route, navigation }) {
             style={[styles.top, { width: cardW, height: cardH, transform: [{ translateX: pan.x }, { translateY: pan.y }, { rotate }] }]}
           >
             <UseCaseCard useCase={current} width={cardW} height={cardH} starred={state.starred.includes(current.id)} onToggleStar={onStar} />
-            <Animated.View style={[styles.hint, styles.hintDismiss, { opacity: dismissHint }]} pointerEvents="none">
-              <X size={16} color="#FFFFFF" /><Text style={styles.hintText}>Dismiss</Text>
+            <Animated.View style={[styles.hint, styles.hintNext, { opacity: nextHint }]} pointerEvents="none">
+              <ChevronRight size={16} color="#FFFFFF" /><Text style={styles.hintText}>{wraps ? "Back to first" : "Next"}</Text>
             </Animated.View>
             <Animated.View style={[styles.hint, styles.hintDetail, { opacity: detailHint }]} pointerEvents="none">
               <Search size={16} color="#FFFFFF" /><Text style={styles.hintText}>Details</Text>
@@ -175,7 +179,7 @@ export default function DeckScreen({ route, navigation }) {
           </Animated.View>
 
           <View style={styles.legend}>
-            <Text style={styles.legendText}>Swipe {SWIPE.detail} for details · swipe {SWIPE.dismiss} to dismiss</Text>
+            <Text style={styles.legendText}>Swipe {SWIPE.detail} for details · swipe {SWIPE.next} for the next card</Text>
           </View>
         </View>
       )}
@@ -192,8 +196,8 @@ const styles = StyleSheet.create({
   under: { position: "absolute", transform: [{ scale: 0.95 }, { translateY: 14 }], opacity: 0.7 },
   top: { shadowColor: "#0B2545", shadowOpacity: 0.25, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 8 },
   hint: { position: "absolute", top: 18, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.45)" },
-  hintDismiss: { left: 18 },
-  hintDetail: { right: 18, top: 60 },
+  hintNext: { left: 18 },
+  hintDetail: { right: 18 },
   hintText: { fontFamily: type.fontFamilyBold, fontSize: 12, color: "#FFFFFF", letterSpacing: 0.5, textTransform: "uppercase" },
   legend: { position: "absolute", bottom: 22 },
   legendText: { fontFamily: type.fontFamily, fontSize: 12, color: colors.textMuted },

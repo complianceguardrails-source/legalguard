@@ -753,7 +753,7 @@ def fetch_visible_use_cases_for_linking(conn: psycopg.Connection) -> list[dict]:
     the previous regulation_basis so a re-run can undo its own links."""
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, name, source, categories, risk_tier, risk_basis, regulation_basis "
+            "SELECT id, name, description, source, categories, risk_tier, risk_basis, regulation_basis, model_modality "
             "FROM banking_use_cases WHERE categories IS NOT NULL OR source = 'curated' ORDER BY name"
         )
         cols = [d.name for d in cur.description]
@@ -772,5 +772,34 @@ def set_regulation_basis(conn: psycopg.Connection, use_case_id: str, basis: list
         cur.execute(
             "UPDATE banking_use_cases SET regulation_basis = %s, updated_at = now() WHERE id = %s",
             (json.dumps(basis) if basis else None, use_case_id),
+        )
+    conn.commit()
+
+
+def fetch_unclassified_categorised_use_cases(conn: psycopg.Connection) -> list[dict]:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, name, categories, description, source, model_card_text FROM banking_use_cases "
+            "WHERE risk_tier = 'unclassified' AND categories IS NOT NULL ORDER BY name"
+        )
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def fetch_visible_use_cases_for_risk_factors(conn: psycopg.Connection) -> list[dict]:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, name, source, categories, modality, model_modality, system_interface_type, risk_tier, risk_basis, risk_factors "
+            "FROM banking_use_cases WHERE categories IS NOT NULL OR source = 'curated' ORDER BY name"
+        )
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def set_risk_factors(conn: psycopg.Connection, use_case_id: str, factors: list[str]) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE banking_use_cases SET risk_factors = %s, updated_at = now() WHERE id = %s",
+            (factors or None, use_case_id),
         )
     conn.commit()

@@ -54,7 +54,7 @@ CATEGORY_LABELS: dict[str, str] = {
     "filings_reports": "Filings & Reports",
     "payments": "Payments",
     "tax_accounting": "Tax & Accounting",
-    "esg_climate": "ESG & Climate",
+    "esg_climate": "ESG, Climate & Nature",
     "fraud_aml": "Fraud & AML",
 }
 
@@ -127,6 +127,10 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     ],
     "esg_climate": [
         "esg", "climate", "sustainab", "carbon", "net zero", "environmental",
+        # nature: the biodiversity, deforestation and natural-capital
+        # vocabulary that TNFD, the EUDR and biodiversity net gain use
+        "biodiversity", "deforestation", "nature related", "natural capital", "tnfd", "greenwash",
+        "green bond", "taxonomy align", "sfdr",
     ],
     "fraud_aml": [
         "fraud", "anti money", "money launder", "aml", "sanction", "kyc", "suspicious", "scam",
@@ -173,10 +177,29 @@ def _describing_name(name: str) -> str:
     return name.split("/", 1)[1] if _OWNER_SLASH_NAME_RE.match(name) else name
 
 
+# Phrases that contain a keyword but mean something else: a "fraud-proof"
+# carbon registry is not a fraud system. Removed from the text before that
+# category's keywords are tried, and only for that category, so the same
+# phrase can still count for another. Found by review of the tagged rows
+# (hashgraph/guardian); add to it as more turn up.
+CATEGORY_NEUTRAL_PHRASES: dict[str, list[str]] = {
+    "fraud_aml": ["fraud proof", "fraud resistant", "fraud resistance", "fraudproof", "anti fraud proof"],
+}
+
+
+def _neutralised(text: str, category: str) -> str:
+    for phrase in CATEGORY_NEUTRAL_PHRASES.get(category, []):
+        text = text.replace(phrase, " ")
+    return text
+
+
 def assign_categories(name: str, description: str | None, evidence: str | None) -> list[str]:
     """Categories for one use case, in CATEGORY_KEYWORDS order. evidence is
     the row's real prose -- the model card's opening (card_prose_head) or
     the README -- and may be empty. Returns [] when nothing matches; the
     caller stores that as NULL."""
     text = _normalize(f"{_describing_name(name)} {description or ''} {evidence or ''}")
-    return [cat for cat, kws in CATEGORY_KEYWORDS.items() if any(_keyword_matches(k, text) for k in kws)]
+    return [
+        cat for cat, kws in CATEGORY_KEYWORDS.items()
+        if any(_keyword_matches(k, _neutralised(text, cat)) for k in kws)
+    ]

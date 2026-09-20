@@ -77,7 +77,7 @@ def run(dry_run: bool) -> None:
                 if not reg_ids:
                     continue
                 per_rule[rule.id] += 1
-                basis.append({"rule": rule.id, "kind": rule.kind, "why": rule.why, "reg_ids": reg_ids})
+                basis.append({"rule": rule.id, "title": rule.title, "kind": rule.kind, "why": rule.why, "reg_ids": reg_ids})
                 for reg_id in reg_ids:
                     now_ruled[reg_id].add(str(uc["id"]))
             links_per_use_case.append(len({r for b in basis for r in b["reg_ids"]}))

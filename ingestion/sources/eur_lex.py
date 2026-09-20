@@ -125,6 +125,93 @@ ACTS: list[EurLexAct] = [
             "30": "Key contractual provisions for ICT third-party services",
         },
     ),
+    # --- Sustainable finance. Where an AI system scores, reports on or
+    # describes sustainability characteristics, these are the disclosure
+    # rules its output feeds, and Art. 13 SFDR / Art. 6 UCPD are where an
+    # unsupported claim becomes greenwashing.
+    EurLexAct(
+        base_celex="32019R2088",
+        short_name="SFDR",
+        clause_prefix="SFDR",
+        application_date="2021-03-10",
+        application_source="Art. 20(2) Regulation (EU) 2019/2088",
+        articles={
+            "3": "Transparency of sustainability-risk policies -- entity-level disclosure an ESG scoring system feeds",
+            "4": "Principal adverse impacts at entity level -- the PAI statement",
+            "6": "Integration of sustainability risks in pre-contractual disclosures",
+            "7": "Principal adverse impacts at financial-product level",
+            "8": "Products promoting environmental or social characteristics -- the 'Article 8' disclosures",
+            "9": "Products with sustainable investment as their objective -- the 'Article 9' disclosures",
+            "10": "Website disclosure of Article 8 and 9 products",
+            "12": "Review of disclosures -- they must be kept up to date, including anything generated",
+            "13": "Marketing communications must not contradict the disclosures -- the greenwashing rule that binds generated product descriptions and client answers",
+        },
+    ),
+    EurLexAct(
+        base_celex="32020R0852",
+        short_name="Taxonomy Regulation",
+        clause_prefix="TAXONOMY",
+        application_date="2022-01-01",
+        application_source="Art. 27(2)(a) Regulation (EU) 2020/852",
+        articles={
+            "3": "Criteria for an environmentally sustainable economic activity -- what a model may and may not call 'sustainable'",
+            "5": "Transparency of products with a sustainable investment objective: taxonomy-alignment disclosure",
+            "6": "Transparency of products promoting environmental characteristics",
+            "7": "Other financial products: the mandatory 'does not take into account the EU criteria' statement",
+            "8": "Undertakings' disclosure of taxonomy-eligible and -aligned turnover, capex and opex -- the KPIs an extraction model reads or writes",
+            "9": "The six environmental objectives, including biodiversity and ecosystems -- the nature scope",
+            "17": "Significant harm to environmental objectives -- the 'do no significant harm' test",
+        },
+    ),
+    EurLexAct(
+        base_celex="32013L0034",
+        short_name="Accounting Directive (CSRD sustainability reporting)",
+        clause_prefix="CSRD",
+        application_date="2024-01-01",
+        application_source="Art. 5(2) Directive (EU) 2022/2464 (first reporting wave, financial years from 1 January 2024)",
+        articles={
+            "19a": "Sustainability reporting: what large undertakings must report under the ESRS -- content a drafting or extraction model produces or consumes",
+            "29a": "Consolidated sustainability reporting at group level",
+        },
+    ),
+    EurLexAct(
+        base_celex="32023R2631",
+        short_name="European Green Bond Regulation",
+        clause_prefix="EUGB",
+        application_date="2024-12-21",
+        application_source="Art. 72 Regulation (EU) 2023/2631",
+        articles={
+            "3": "Use of the designation 'European Green Bond' -- a label a model must not apply without the conditions being met",
+            "4": "Use of proceeds: taxonomy alignment of what the bond finances",
+            "10": "European Green Bond factsheet -- pre-issuance disclosure content",
+        },
+    ),
+    EurLexAct(
+        base_celex="32023R1115",
+        short_name="EU Deforestation Regulation",
+        clause_prefix="EUDR",
+        application_date="2026-12-30",
+        application_source="Art. 38(2) Regulation (EU) 2023/1115 as consolidated 2025-12-26 (large and medium operators; micro and small from 30 June 2027 under Art. 38(3))",
+        articles={
+            "3": "Prohibition: relevant products only if deforestation-free, legal, and covered by a due diligence statement",
+            "4": "Obligations of operators -- binds the bank's commodity clients; a document or screening model feeds their due diligence statement",
+            "8": "Due diligence: the information, risk assessment and mitigation steps",
+            "9": "Information requirements: geolocation and supply-chain data a model may be asked to extract or verify",
+            "10": "Risk assessment -- the analysis an AI system may automate for an operator",
+            "11": "Risk mitigation",
+        },
+    ),
+    EurLexAct(
+        base_celex="32005L0029",
+        short_name="Unfair Commercial Practices Directive (green claims)",
+        clause_prefix="UCPD",
+        application_date="2007-12-12",
+        application_source="Art. 19 Directive 2005/29/EC; environmental-claim amendments by Directive (EU) 2024/825 apply from 27 September 2026",
+        articles={
+            "6": "Misleading actions, including environmental or social characteristics (6(1)(b)) and claims about future environmental performance (6(2)(d)) -- binds generated marketing and customer answers",
+            "7": "Misleading omissions -- leaving out the qualifications that make a green claim true",
+        },
+    ),
 ]
 
 
@@ -132,15 +219,24 @@ class EurLexError(Exception):
     pass
 
 
-def _sparql(query: str) -> list[dict]:
-    resp = requests.get(
-        SPARQL_URL,
-        params={"query": query},
-        headers={**_HEADERS, "Accept": "application/sparql-results+json"},
-        timeout=60,
-    )
-    resp.raise_for_status()
-    return resp.json()["results"]["bindings"]
+def _sparql(query: str, attempts: int = 3) -> list[dict]:
+    # CELLAR's SPARQL endpoint times out under load a few times an hour;
+    # a second try almost always answers. Only the last failure is raised.
+    for attempt in range(1, attempts + 1):
+        try:
+            resp = requests.get(
+                SPARQL_URL,
+                params={"query": query},
+                headers={**_HEADERS, "Accept": "application/sparql-results+json"},
+                timeout=60,
+            )
+            resp.raise_for_status()
+            return resp.json()["results"]["bindings"]
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            if attempt == attempts:
+                raise
+            logger.warning("SPARQL attempt %d/%d failed (%s); retrying", attempt, attempts, exc.__class__.__name__)
+            time.sleep(5 * attempt)
 
 
 def consolidated_celex_candidates(base_celex: str) -> list[str]:

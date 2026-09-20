@@ -24,7 +24,9 @@ function DiscoverFlow() {
   return (
     <DiscoverStack.Navigator screenOptions={{ headerShown: false }}>
       <DiscoverStack.Screen name="Discover" component={DiscoverScreen} />
-      <DiscoverStack.Screen name="Deck" component={DeckScreen} />
+      {/* The deck's right-swipe is "next card"; the stack's own swipe-back
+          gesture would otherwise claim the same drag and pop to Discover. */}
+      <DiscoverStack.Screen name="Deck" component={DeckScreen} options={{ gestureEnabled: false }} />
       <DiscoverStack.Screen name="UseCaseDetail" component={UseCaseDetailScreen} />
     </DiscoverStack.Navigator>
   );

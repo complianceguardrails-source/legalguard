@@ -69,6 +69,9 @@ CREATE TABLE banking_use_cases (
     -- Which regulations reach this use case and why (rule id, kind, why,
     -- reg_ids). See migrations/010_add_regulation_basis.sql.
     regulation_basis         JSONB,
+    -- Granular risks (ingestion/risk_taxonomy.py slugs) the tier is made
+    -- of. See migrations/011_add_risk_factors.sql.
+    risk_factors             TEXT[],
     created_at          TIMESTAMPTZ DEFAULT now(),
     updated_at          TIMESTAMPTZ DEFAULT now(),
     UNIQUE (name)

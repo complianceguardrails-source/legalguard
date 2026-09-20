@@ -13,11 +13,12 @@ import { fetchGuardrailPackage } from "../lib/generator";
 import { categoryLabel, categoryTone, useCaseTone, sectorLabel, TIER_LABEL } from "../lib/categories";
 import { getDiscoverState, toggleStar, dismiss } from "../lib/discoverState";
 import UseCaseArt from "../components/UseCaseArt";
+import { RISK_FAMILIES, RISK_BY_SLUG } from "../lib/riskTaxonomy";
 import RegulationCard from "../components/RegulationCard";
 import MetadataPill from "../components/MetadataPill";
 
 const SOURCE_LABEL = { github_mined: "Mined from GitHub", huggingface_mined: "Mined from Hugging Face", curated: "Hand-curated", user_submitted: "User-submitted" };
-const GROUP_LABEL = { category: "Because of what it does", basis: "Because of how it was classified", baseline: "Baseline for any AI system in a regulated firm", overlap: "Text overlap" };
+const GROUP_LABEL = { category: "Because of what it does", basis: "Because of how it was classified", baseline: "Baseline for any AI system in a regulated firm", overlap: "Candidate from text overlap" };
 const GROUP_TONE = { category: colors.primary, basis: "#8A6A16", baseline: colors.textMuted, overlap: colors.textMuted };
 const TIER_VARIANT = { prohibited: "danger", high_risk: "warning", limited_risk: "info", minimal_risk: "success", unclassified: "neutral" };
 
@@ -51,18 +52,34 @@ export default function UseCaseDetailScreen({ route, navigation }) {
     const byId = new Map(matched.map((r) => [r.reg_id, r]));
     const explained = new Set();
     const out = [];
+    // A regulation two rules both reach (SFDR Art. 13 is in the ESG
+    // disclosures and the greenwashing rule) is shown once, under the
+    // first rule that names it, so the counts add up to the total.
     for (const entry of useCase.regulation_basis || []) {
-      const regs = entry.reg_ids.map((id) => byId.get(id)).filter(Boolean);
+      const regs = entry.reg_ids.map((id) => byId.get(id)).filter((r) => r && !explained.has(r.reg_id));
       if (!regs.length) continue;
       regs.forEach((r) => explained.add(r.reg_id));
-      out.push({ key: entry.rule, kind: entry.kind, why: entry.why, regs });
+      out.push({ key: entry.rule, title: entry.title || GROUP_LABEL[entry.kind], kind: entry.kind, why: entry.why, regs });
     }
     const rest = matched.filter((r) => !explained.has(r.reg_id));
-    if (rest.length) out.push({ key: "overlap", kind: "overlap", why: "Linked by word overlap between this use case's description and the regulation text -- a candidate to confirm, not a stated basis.", regs: rest });
+    if (rest.length) out.push({ key: "overlap", title: "Text overlap", kind: "overlap", why: "Linked by word overlap between this use case's description and the regulation text -- a candidate to confirm, not a stated basis.", regs: rest });
     const order = { category: 0, basis: 1, baseline: 2, overlap: 3 };
     return out.sort((a, b) => order[a.kind] - order[b.kind]);
   }, [matched, useCase.regulation_basis]);
   const [open, setOpen] = useState(() => new Set());
+
+  // What the tier is made of: the use case's granular risks, by family.
+  // Tapping the tier pill opens it; tapping a risk shows its description.
+  const [tierOpen, setTierOpen] = useState(false);
+  const [riskOpen, setRiskOpen] = useState(null);
+  const riskFamilies = useMemo(() => {
+    const bySlug = new Set(useCase.risk_factors || []);
+    return RISK_FAMILIES.map((fam) => ({
+      ...fam,
+      risks: Object.values(RISK_BY_SLUG).filter((r) => r.family === fam.key && bySlug.has(r.slug)),
+    })).filter((fam) => fam.risks.length);
+  }, [useCase.risk_factors]);
+  const riskCount = (useCase.risk_factors || []).length;
   const toggleGroup = (key) => setOpen((prev) => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
 
   useEffect(() => {
@@ -81,9 +98,9 @@ export default function UseCaseDetailScreen({ route, navigation }) {
   const blurb = (useCase.description || "").startsWith("Hugging Face model") ? null : useCase.description;
   const link = useCase.github_reference_url || (useCase.hf_model_id ? `https://huggingface.co/${useCase.hf_model_id}` : null);
 
-  // Coming from the deck, the two decisions a card offers are offered here
-  // too, so reading the detail never strands you: both return to the deck,
-  // which has already moved this card to the back.
+  // Coming from the deck, the two ways off a card are offered here too, so
+  // reading the detail never strands you: Dismiss removes it and returns,
+  // Next card returns and advances the deck by one.
   const onDismiss = async () => {
     await dismiss(useCase.id);
     navigation.goBack();
@@ -137,25 +154,71 @@ export default function UseCaseDetailScreen({ route, navigation }) {
           What the data holds for this system. Heuristic classifications, not a legal determination.
         </Text>
         <View style={styles.pills}>
-          <MetadataPill label={TIER_LABEL[useCase.risk_tier] || "Unclassified"} variant={TIER_VARIANT[useCase.risk_tier] || "neutral"} />
+          <TouchableOpacity
+            onPress={() => setTierOpen((v) => !v)}
+            disabled={!riskCount}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: tierOpen }}
+            accessibilityLabel={`${TIER_LABEL[useCase.risk_tier] || "Unclassified"}, ${riskCount} risks`}
+            style={styles.tierTap}
+          >
+            <MetadataPill label={`${TIER_LABEL[useCase.risk_tier] || "Unclassified"}${riskCount ? ` · ${riskCount} risks` : ""}`} variant={TIER_VARIANT[useCase.risk_tier] || "neutral"} />
+            {!!riskCount && (tierOpen ? <ChevronDown size={14} color={colors.textMuted} /> : <ChevronRight size={14} color={colors.textMuted} />)}
+          </TouchableOpacity>
           {!!sectorLabel(useCase.parent_sector) && <MetadataPill label={sectorLabel(useCase.parent_sector)} variant="neutral" />}
           {!!useCase.modality && <MetadataPill label={useCase.modality.replace("_", " ")} variant="neutral" />}
           {!!useCase.model_modality && <MetadataPill label={useCase.model_modality} variant="info" />}
           {!!useCase.system_interface_type && <MetadataPill label={useCase.system_interface_type} variant="info" />}
           {(useCase.agent_operational_tools || []).map((t) => <MetadataPill key={t} label={t} variant="warning" />)}
         </View>
+        {tierOpen && (
+          <View style={styles.composition}>
+            <Text style={styles.compositionNote}>
+              What this tier is made of: {riskCount} risk{riskCount === 1 ? "" : "s"} in {riskFamilies.length} famil{riskFamilies.length === 1 ? "y" : "ies"}, each assigned by a rule from what the system does and what it is. Tap one for what it means.
+            </Text>
+            {riskFamilies.map((fam) => (
+              <View key={fam.key} style={styles.family}>
+                <View style={styles.familyHead}>
+                  <Text style={styles.familyLabel}>{fam.label}</Text>
+                  <Text style={styles.groupCount}>{fam.risks.length}</Text>
+                </View>
+                <View style={styles.riskChips}>
+                  {fam.risks.map((r) => {
+                    const on = riskOpen === r.slug;
+                    return (
+                      <TouchableOpacity key={r.slug} onPress={() => setRiskOpen(on ? null : r.slug)} style={[styles.riskChip, on && { backgroundColor: tone, borderColor: tone }]} accessibilityRole="button" accessibilityState={{ expanded: on }}>
+                        <Text style={[styles.riskChipText, on && { color: "#FFFFFF" }]}>{r.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {fam.risks.some((r) => r.slug === riskOpen) && (
+                  <Text style={styles.riskDescription}>{RISK_BY_SLUG[riskOpen].description}</Text>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
         {useCase.risk_tier && useCase.risk_tier !== "unclassified" && (
           <View style={styles.why}>
             <Text style={styles.whyTitle}>Why {(TIER_LABEL[useCase.risk_tier] || useCase.risk_tier).toLowerCase()}</Text>
             {useCase.risk_basis ? (
               <>
-                <Text style={styles.whyText}>
-                  The classifier found{" "}
-                  {useCase.risk_basis.matched.map((m, i) => (
-                    <Text key={m} style={styles.whyPhrase}>{i ? ", " : ""}“{m}”</Text>
-                  ))}{" "}
-                  in this system's own name or description.
-                </Text>
+                {useCase.risk_basis.from === "category_default" ? (
+                  <Text style={styles.whyText}>
+                    No phrase in this system's name or description matched the classifier. This is the default tier for{" "}
+                    <Text style={styles.whyPhrase}>{useCase.risk_basis.basis.map((b) => categoryLabel(b.category)).join(", ")}</Text>
+                    {" "}-- a starting point for a reviewer to confirm.
+                  </Text>
+                ) : (
+                  <Text style={styles.whyText}>
+                    The classifier found{" "}
+                    {useCase.risk_basis.matched.map((m, i) => (
+                      <Text key={m} style={styles.whyPhrase}>{i ? ", " : ""}“{m}”</Text>
+                    ))}{" "}
+                    in this system's own name or description.
+                  </Text>
+                )}
                 {useCase.risk_basis.basis.map((b) => (
                   <View key={b.summary} style={styles.basis}>
                     {!!b.reference && <Text style={styles.basisRef}>{b.reference}</Text>}
@@ -200,12 +263,13 @@ export default function UseCaseDetailScreen({ route, navigation }) {
                 <View key={g.key} style={styles.group}>
                   <TouchableOpacity onPress={() => toggleGroup(g.key)} style={styles.groupHead} accessibilityRole="button" accessibilityState={{ expanded: isOpen }}>
                     <Chevron size={16} color={colors.textMuted} />
-                    <View style={{ flex: 1, gap: 4 }}>
+                    <View style={{ flex: 1, gap: 3 }}>
                       <View style={styles.groupMeta}>
-                        <Text style={[styles.groupKind, { color: GROUP_TONE[g.kind] }]}>{GROUP_LABEL[g.kind]}</Text>
-                        <Text style={styles.groupCount}>{g.regs.length} regulation{g.regs.length === 1 ? "" : "s"}</Text>
+                        <Text style={styles.groupTitle} numberOfLines={1}>{g.title}</Text>
+                        <Text style={styles.groupCount}>{g.regs.length}</Text>
                       </View>
-                      <Text style={styles.groupWhy}>{g.why}</Text>
+                      <Text style={[styles.groupKind, { color: GROUP_TONE[g.kind] }]}>{GROUP_LABEL[g.kind]}</Text>
+                      {isOpen && <Text style={styles.groupWhy}>{g.why}</Text>}
                     </View>
                   </TouchableOpacity>
                   {isOpen && <View style={styles.groupBody}>{g.regs.map((r) => <RegulationCard key={r.reg_id} item={r} />)}</View>}
@@ -251,7 +315,14 @@ export default function UseCaseDetailScreen({ route, navigation }) {
             <X size={16} color={colors.textMain} />
             <Text style={styles.footBtnGhostText}>Dismiss</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.footBtn, styles.footBtnPrimary]} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Next card">
+          <TouchableOpacity
+            style={[styles.footBtn, styles.footBtnPrimary]}
+            // Back to the deck it came from, asking it to advance; merge
+            // keeps the deck's own params (slugs, mode) intact.
+            onPress={() => navigation.navigate({ name: "Deck", params: { advance: Date.now() }, merge: true })}
+            accessibilityRole="button"
+            accessibilityLabel="Next card"
+          >
             <Text style={styles.footBtnPrimaryText}>Next card</Text>
             <ArrowRight size={16} color="#FFFFFF" />
           </TouchableOpacity>
@@ -282,6 +353,16 @@ const styles = StyleSheet.create({
   linkRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   link: { fontFamily: type.fontFamily, fontSize: 12, color: colors.secondary, flex: 1 },
   pills: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  tierTap: { flexDirection: "row", alignItems: "center", gap: 4 },
+  composition: { gap: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 12 },
+  compositionNote: { fontFamily: type.fontFamily, fontSize: 12, color: colors.textMuted, lineHeight: 17 },
+  family: { gap: 8 },
+  familyHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  familyLabel: { flex: 1, fontFamily: type.fontFamilyBold, fontSize: 12.5, color: colors.textMain },
+  riskChips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  riskChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
+  riskChipText: { fontFamily: type.fontFamilyMedium, fontSize: 11.5, color: colors.textMain },
+  riskDescription: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMain, lineHeight: 18, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: colors.border },
   why: { gap: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 12 },
   whyTitle: { fontFamily: type.fontFamilyBold, fontSize: 13, color: colors.textMain },
   whyText: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMain, lineHeight: 18 },
@@ -291,8 +372,9 @@ const styles = StyleSheet.create({
   group: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, backgroundColor: colors.surface, overflow: "hidden" },
   groupHead: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 12 },
   groupMeta: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  groupTitle: { flex: 1, fontFamily: type.fontFamilyBold, fontSize: 13.5, color: colors.textMain },
   groupKind: { fontFamily: type.fontFamilyMedium, fontSize: 10.5, letterSpacing: 0.5, textTransform: "uppercase" },
-  groupCount: { fontFamily: type.fontFamily, fontSize: 11, color: colors.textMuted, fontVariant: ["tabular-nums"] },
+  groupCount: { flexShrink: 0, minWidth: 26, textAlign: "center", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: colors.background, fontFamily: type.fontFamilyMedium, fontSize: 11, color: colors.textMuted, fontVariant: ["tabular-nums"] },
   groupWhy: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMain, lineHeight: 18 },
   groupBody: { paddingHorizontal: 12, paddingBottom: 12, gap: 8, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
   callout: { flexDirection: "row", gap: 10, alignItems: "flex-start", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 12 },

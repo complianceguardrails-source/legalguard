@@ -41,7 +41,7 @@ export const CATEGORIES = [
   { slug: "filings_reports", label: "Filings & Reports", tone: TONES.forest },
   { slug: "payments", label: "Payments", tone: TONES.royal },
   { slug: "tax_accounting", label: "Tax & Accounting", tone: TONES.ochre },
-  { slug: "esg_climate", label: "ESG & Climate", tone: TONES.green },
+  { slug: "esg_climate", label: "ESG, Climate & Nature", tone: TONES.green },
   { slug: "fraud_aml", label: "Fraud & AML", tone: TONES.plum },
 ];
 
