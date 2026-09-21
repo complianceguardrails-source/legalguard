@@ -61,6 +61,7 @@ def _gh_get(path: str, params: dict | None = None) -> dict | None:
 def _gh_repo_row(repo: dict) -> dict:
     return {
         "platform": "github",
+        "created_at": repo.get("created_at"),
         "external_id": repo["full_name"],
         "url": repo["html_url"],
         "name": repo["name"],
@@ -82,8 +83,28 @@ def fetch_github_repo(full_name: str) -> dict | None:
 
 def search_github(query: str) -> list[dict]:
     data = _gh_get("/search/repositories", {"q": f"{query} stars:>={MIN_SEARCH_STARS}", "sort": "stars", "order": "desc", "per_page": SEARCH_TOP_N})
-    time.sleep(6.5)  # search: 10/min unauthenticated
+    time.sleep(6.5 if not os.environ.get("GITHUB_TOKEN") else 2.1)  # search: 10/min unauthenticated, 30/min with a token
     return [_gh_repo_row(r) for r in (data or {}).get("items", [])]
+
+
+EMERGING_DAYS = 90
+EMERGING_MIN_STARS = 20
+
+
+def search_github_emerging(query: str) -> list[dict]:
+    """The same query restricted to repositories created in the last
+    EMERGING_DAYS days -- what the stars-sorted search cannot surface yet.
+    A low star floor keeps out empty forks without waiting for adoption."""
+    from datetime import date, timedelta
+    since = (date.today() - timedelta(days=EMERGING_DAYS)).isoformat()
+    data = _gh_get("/search/repositories", {"q": f"{query} created:>={since} stars:>={EMERGING_MIN_STARS}", "sort": "stars", "order": "desc", "per_page": SEARCH_TOP_N})
+    time.sleep(6.5 if not os.environ.get("GITHUB_TOKEN") else 2.1)
+    rows = []
+    for r in (data or {}).get("items", []):
+        row = _gh_repo_row(r)
+        row["created_at"] = r.get("created_at")
+        rows.append(row)
+    return rows
 
 
 def fetch_hf_model(model_id: str) -> dict | None:
@@ -95,6 +116,7 @@ def fetch_hf_model(model_id: str) -> dict | None:
     card = m.get("cardData") or {}
     return {
         "platform": "huggingface",
+        "created_at": m.get("createdAt"),
         "external_id": m.get("id") or model_id,
         "url": f"https://huggingface.co/{m.get('id') or model_id}",
         "name": (m.get("id") or model_id).split("/")[-1],
@@ -143,6 +165,11 @@ def mine_guardrail_repos() -> tuple[list[dict], list[str], list[str]]:
                 by_key.setdefault(key, row)
                 if not any(e["risk"] == risk for e in evidence[key]):
                     evidence[key].append({"risk": risk, "how": "search", "query": q})
+            for row in search_github_emerging(q):
+                key = (row["platform"], row["external_id"])
+                by_key.setdefault(key, row)
+                if not any(e["risk"] == risk for e in evidence[key]):
+                    evidence[key].append({"risk": risk, "how": "emerging", "query": q, "created_at": row.get("created_at")})
 
     rows = []
     for key, row in by_key.items():

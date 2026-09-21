@@ -1,44 +1,38 @@
 # LegalGuard Privacy Policy
 
-**Last updated:** 2026-09-05
+**Last updated:** 2026-09-20
 
-LegalGuard is an open-source guardrail-orchestration app. This policy
-describes exactly what the app does with data, matching its actual
-implementation -- not a generic template.
+LegalGuard is an open-source reference app for financial-industry AI
+risk. This policy describes exactly what the app does with data, matching
+its actual implementation -- not a generic template.
 
-## GitHub Personal Access Token
+## No account, no credentials
 
-If you connect a GitHub account, your Personal Access Token is stored
-**only on your device**, in the OS-provided secure credential store (iOS
-Keychain via `expo-secure-store`). It is never transmitted to any server
-operated by LegalGuard, never logged, and never leaves your device except
-in direct HTTPS requests you initiate to `api.github.com` -- GitHub's own
-servers, under GitHub's own privacy policy (https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement).
+The app has no sign-in, no account and asks for no tokens or passwords.
+Every screen reads from a shared, public knowledge base. (Versions before
+1.1.0 offered an optional GitHub connection; that flow and its on-device
+token storage were removed in 1.1.0.)
 
-You can remove the stored token at any time from the app's Dispatch/GitOps
-Console screen, which deletes it from the device's secure store immediately.
+## What the app reads
 
-## Data sent to GitHub
+LegalGuard maintains a shared, non-personal database of AI use cases
+(mined from public GitHub repositories and the Hugging Face Hub), AI
+regulations (regulatory text from public government sites), open-source
+guardrail repositories (public GitHub and Hub metadata), and news
+headlines (public RSS feeds of financial outlets and regulators, stored
+as title, summary and link). None of it is about you.
 
-When you approve a guardrail action (creating a repository, branch,
-commit, or pull request), the app sends the relevant repository name,
-file contents, and commit/PR metadata directly to the GitHub REST API
-using your token. This traffic goes directly from your device to GitHub;
-LegalGuard's own backend is never in this path.
+## What stays on your device
 
-## Shared knowledge-base backend
+Which cards you have starred or dismissed, and which categories you last
+selected, are stored only on the device and are removed when you delete
+the app. They are never sent anywhere.
 
-LegalGuard maintains a shared, non-personal database of AI regulations and
-financial-industry use cases (regulatory text, jurisdiction, effective
-dates, open-source repository references). This data is sourced from
-public government/regulatory websites and public GitHub repositories --
-it is not about you.
+## Links to other sites
 
-If you use the "Add your own use case" feature, the use case description
-you enter is stored in this shared database so other users benefit from
-it, along with your GitHub username (if connected) so it can be
-attributed as a community contribution. No other personal information is
-collected through this feature.
+Tapping a story, a regulation's source, a use case's repository or a
+guardrail repository opens that site in your browser, under that site's
+own privacy policy. LegalGuard passes nothing about you to it.
 
 ## What we do not collect
 
@@ -47,27 +41,18 @@ crash-reporting services, or any third-party tracking. The app does not
 request access to your contacts, location, camera, microphone, or photo
 library.
 
-## Data retention and deletion
-
-- Your GitHub token: deleted immediately when you disconnect in the app,
-  or when you uninstall the app (device secure storage is cleared with
-  the app).
-- Use cases you submit to the shared knowledge base: since this is a
-  shared community resource, contact compliance.guardrails@gmail.com to
-  request removal of a specific submission.
-
 ## Third-party services
 
-- **GitHub** (api.github.com): receives requests directly from your
-  device using your own token, governed by GitHub's privacy policy.
-- **Neon.tech** (Postgres) and its PostgREST hosting provider: hosts the
-  shared, non-personal regulatory knowledge base described above.
+- **Neon.tech** (Postgres) and **Render** (PostgREST hosting): host the
+  shared, non-personal knowledge base described above. Requests from the
+  app to it carry no identifier of you beyond what any HTTPS request
+  carries (your IP address, seen by the hosting provider).
 
 ## Changes to this policy
 
-Since LegalGuard is open source, changes to this policy will be committed
-to the project repository alongside the corresponding code changes, so
-the policy and the app's actual behavior stay in sync.
+Since LegalGuard is open source, changes to this policy are committed to
+the project repository alongside the corresponding code changes, so the
+policy and the app's actual behavior stay in sync.
 
 ## Contact
 

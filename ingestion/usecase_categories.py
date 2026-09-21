@@ -62,6 +62,7 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "trading_markets": [
         "trading", "trader", "backtest", "algorithmic", "order execution", "market making", "hft",
         "quant ", "quantitative", "trading signal", "exchange", "market data", "交易",
+        "order book", "market simulation", "financial time series",
     ],
     # Banking operations vocabulary came from the curated rows: eight
     # hand-entered banking use cases (vulnerable-customer routing, inbound
@@ -105,7 +106,7 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     ],
     "portfolio_wealth": [
         "portfolio", "asset allocation", "wealth", "robo advis", "investment advice", "invest",
-        "asset management", "hedge fund", "etf",
+        "asset management", "hedge fund", "etf", "equity research",
     ],
     "risk_management": [
         "risk management", "value at risk", "stress test", "basel", "capital adequacy",
@@ -190,6 +191,33 @@ CATEGORY_NEUTRAL_PHRASES: dict[str, list[str]] = {
 }
 
 
+# Categories declared for a repository whose name and description do not
+# say what its finance content is: the general-purpose cookbooks carry
+# financial-analysis recipes, the skill packs are finance agent skills.
+# A declared category is added to whatever the keywords find, never
+# replaces it, and is listed here so it is visible as a decision.
+DECLARED_CATEGORIES: dict[str, list[str]] = {
+    "anthropics/claude-cookbooks": ["finance_llm", "filings_reports"],
+    "openai/openai-cookbook": ["finance_llm", "filings_reports"],
+    "himself65/finance-skills": ["finance_llm", "filings_reports", "portfolio_wealth"],
+    "RKiding/Awesome-finance-skills": ["finance_llm", "filings_reports", "portfolio_wealth"],
+    "quant-sentiment-ai/claude-equity-research": ["finance_llm", "portfolio_wealth", "filings_reports"],
+    "financial-datasets/mcp-server": ["trading_markets", "filings_reports"],
+    "dgunning/edgartools": ["filings_reports", "compliance_legal"],
+    "georgezouq/awesome-ai-in-finance": ["finance_llm", "trading_markets"],
+    "hananedupouy/LLMs-in-Finance": ["finance_llm"],
+    "OpenBB-finance/agents-for-openbb": ["trading_markets", "finance_llm"],
+    "juanjuandog/FinSight-AI": ["portfolio_wealth", "finance_llm", "stock_prediction"],
+    "The-FinAI/FinBen": ["finance_llm"],
+    "patronus-ai/financebench": ["finance_llm", "filings_reports"],
+    # generative market models: their names say what they are, their
+    # descriptions (where present) say little
+    "seantanger/diffusion-financial-timeseries-generation": ["trading_markets", "risk_management"],
+    "EmmanuelleB985/FinDiffusion": ["trading_markets", "risk_management"],
+    "eddisonpham/StonkBench": ["trading_markets", "risk_management"],
+}
+
+
 def _neutralised(text: str, category: str) -> str:
     for phrase in CATEGORY_NEUTRAL_PHRASES.get(category, []):
         text = text.replace(phrase, " ")
@@ -202,7 +230,9 @@ def assign_categories(name: str, description: str | None, evidence: str | None) 
     the README -- and may be empty. Returns [] when nothing matches; the
     caller stores that as NULL."""
     text = _normalize(f"{_describing_name(name)} {description or ''} {evidence or ''}")
-    return [
+    found = {
         cat for cat, kws in CATEGORY_KEYWORDS.items()
         if any(_keyword_matches(k, _neutralised(text, cat)) for k in kws)
-    ]
+    }
+    found.update(DECLARED_CATEGORIES.get(name, []))
+    return [cat for cat in CATEGORY_KEYWORDS if cat in found]

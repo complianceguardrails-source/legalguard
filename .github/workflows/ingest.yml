@@ -44,6 +44,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          python apply_category_risk_defaults.py --recompute
           python link_regulations_by_category.py
           python tag_risk_factors.py
 

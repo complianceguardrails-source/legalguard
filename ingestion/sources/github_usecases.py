@@ -116,6 +116,15 @@ DEFAULT_QUERIES = [
     # "specific system vs. generic list" noise. Future runs of this query
     # should get the same finance-relevance check, not just a noise check.
     '"biodiversity credit" in:name,description,readme',
+    # Generative market models: diffusion / GAN / flow models that produce
+    # synthetic financial time series or simulate order books. They are
+    # AI systems whose output is a market, so they carry the systemic and
+    # synthetic-data risks the taxonomy names.
+    "diffusion model financial time series in:name,description,readme",
+    "synthetic financial time series generation in:name,description,readme",
+    "limit order book simulation deep learning in:name,description,readme",
+    # Decision-model ("jev") systems applied to trading or credit.
+    "jev trading OR jev finance OR jev credit in:name,description,readme",
 ]
 
 
@@ -143,6 +152,81 @@ def search_repositories(query: str, per_page: int = 15) -> list[dict]:
         return []
     resp.raise_for_status()
     return resp.json().get("items", [])
+
+
+# Repositories that must be in the knowledge base whether or not a search
+# surfaces them: the finance-AI platforms, agent skill packs, benchmarks
+# and reference collections the product owner named. Fetched by name on
+# every run so stars and description stay the platform's; a repository
+# that disappears is logged and skipped, never invented.
+PINNED_REPOS = [
+    "OpenBB-finance/OpenBB",
+    "OpenBB-finance/agents-for-openbb",
+    "dgunning/edgartools",
+    "financial-datasets/mcp-server",
+    "juanjuandog/FinSight-AI",
+    "RUC-NLPIR/FinSight",
+    "quant-sentiment-ai/claude-equity-research",
+    "himself65/finance-skills",
+    "RKiding/Awesome-finance-skills",
+    "anthropics/claude-cookbooks",
+    "openai/openai-cookbook",
+    "The-FinAI/PIXIU",
+    "The-FinAI/FinBen",
+    "patronus-ai/financebench",
+    "georgezouq/awesome-ai-in-finance",
+    "hananedupouy/LLMs-in-Finance",
+    # generative market models and the finance decision-model system
+    "EmmanuelleB985/FinDiffusion",
+    "LeonardoBerti00/DeepMarket",
+    "seantanger/diffusion-financial-timeseries-generation",
+    "CallmeQuant/financial_ts_generation_hackathon",
+    "eddisonpham/StonkBench",
+    "OpenByteInc/QuantDinger",
+]
+
+
+def fetch_repository(full_name: str) -> Optional[dict]:
+    resp = requests.get(f"https://api.github.com/repos/{full_name}", headers=_headers(), timeout=30)
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _candidate(repo: dict, matched: str) -> dict:
+    name = repo.get("full_name", repo.get("name", "unknown/unknown"))
+    description = repo.get("description") or ""
+    topics = repo.get("topics", [])
+    sector, modality = classify_use_case(name, description, topics)
+    risk_tier = classify_risk_tier(name, description, topics)
+    return {
+        "name": name,
+        "parent_sector": sector,
+        "modality": modality,
+        "risk_tier": risk_tier,
+        "description": description[:500],
+        "github_reference_url": repo.get("html_url"),
+        "matched_query": matched,
+        "stars": repo.get("stargazers_count", 0),
+    }
+
+
+def mine_pinned_repos() -> list[dict]:
+    out: list[dict] = []
+    for full_name in PINNED_REPOS:
+        try:
+            repo = fetch_repository(full_name)
+        except requests.RequestException:
+            logger.exception("pinned repo fetch failed: %s", full_name)
+            continue
+        if not repo:
+            logger.warning("pinned repo no longer exists: %s", full_name)
+            continue
+        out.append(_candidate(repo, "pinned"))
+        time.sleep(0.5 if os.environ.get("GITHUB_TOKEN") else 1.5)
+    logger.info("GitHub pinned repos: %d of %d resolved", len(out), len(PINNED_REPOS))
+    return out
 
 
 def mine_use_cases(queries: Iterable[str] = DEFAULT_QUERIES, min_stars: int = 3) -> list[dict]:

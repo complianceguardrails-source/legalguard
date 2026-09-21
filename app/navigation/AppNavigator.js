@@ -1,13 +1,14 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Compass, Radar, Telescope, Newspaper } from "lucide-react-native";
+import { Compass, Radar, Telescope, Newspaper, ShieldCheck } from "lucide-react-native";
 
 import { colors, type } from "../theme";
 import AppHeader from "../components/AppHeader";
 import DashboardScreen from "../screens/DashboardScreen";
 import HorizonScreen from "../screens/HorizonScreen";
 import TrendingRisksScreen from "../screens/TrendingRisksScreen";
+import GuardrailsScreen from "../screens/GuardrailsScreen";
 import DiscoverScreen from "../screens/DiscoverScreen";
 import DeckScreen from "../screens/DeckScreen";
 import UseCaseDetailScreen from "../screens/UseCaseDetailScreen";
@@ -42,8 +43,9 @@ export default function AppNavigator() {
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
       }}
     >
-      {/* Four tabs: Discover (use cases and their risks), Trending (today's
-          stories on those risks), Radar (the numbers), Horizon (forecasts).
+      {/* Five tabs: Discover (use cases and their risks), Trending (today's
+          stories on those risks), Guardrails (how the open-source ecosystem
+          covers the taxonomy), Radar (the numbers), Horizon (forecasts).
           The Use Cases / Audit / Dispatch tabs -- the opa/Rego generation and
           GitHub push flow -- were removed when guardrails became "existing
           open-source controls per risk" rather than generated policy. */}
@@ -63,6 +65,15 @@ export default function AppNavigator() {
           title: "Trending Risks",
           tabBarLabel: "Trending",
           tabBarIcon: ({ color, size }) => <Newspaper color={color} size={size} />,
+        }}
+      />
+      <Tab.Screen
+        name="Guardrails"
+        component={GuardrailsScreen}
+        options={{
+          title: "Guardrail Coverage",
+          tabBarLabel: "Guardrails",
+          tabBarIcon: ({ color, size }) => <ShieldCheck color={color} size={size} />,
         }}
       />
       <Tab.Screen

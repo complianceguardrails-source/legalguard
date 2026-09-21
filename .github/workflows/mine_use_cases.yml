@@ -60,3 +60,22 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python enrich_system_signals.py
+
+      - name: Fetch model cards for newly-mined Hub models
+        working-directory: ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python enrich_hf_model_cards.py
+
+      - name: Classify newly-mined use cases
+        # Categories from name + prose; a tier for every categorised row
+        # (phrase first, category default second); regulations by rule;
+        # granular risks. Same steps the nightly run repeats for the corpus.
+        working-directory: ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python tag_use_case_categories.py
+          python apply_category_risk_defaults.py --recompute
+          python link_regulations_by_category.py
+          python tag_risk_factors.py

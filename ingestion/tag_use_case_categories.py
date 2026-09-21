@@ -40,7 +40,7 @@ def evidence_for(row: dict) -> str:
     return (row.get("llm_evidence_text") or "")[:1500]
 
 
-def run(dry_run: bool, review_file: Path) -> None:
+def run(dry_run: bool, review_file: Path | None) -> None:
     sizes: collections.Counter = collections.Counter()
     per_row: collections.Counter = collections.Counter()
     changed = 0
@@ -68,6 +68,9 @@ def run(dry_run: bool, review_file: Path) -> None:
     for c in CATEGORIES:
         logger.info("  %-22s %5d", CATEGORY_LABELS[c], sizes[c])
 
+    if review_file is None:
+        logger.info("%d untagged row(s) (pass --review-file to write them out)", len(untagged))
+        return
     with review_file.open("w", encoding="utf-8") as sink:
         sink.write("name\tsource\tdescription\n")
         for row in untagged:
@@ -78,7 +81,7 @@ def run(dry_run: bool, review_file: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--review-file", type=Path, default=Path("untagged_use_cases.tsv"))
+    parser.add_argument("--review-file", type=Path, default=None, help="write untagged rows here for review (off by default)")
     args = parser.parse_args()
     run(args.dry_run, args.review_file)
 

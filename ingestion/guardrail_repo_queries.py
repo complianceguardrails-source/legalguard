@@ -22,6 +22,9 @@ from risk_taxonomy import SLUGS
 _DRIFT = ["evidentlyai/evidently", "NannyML/nannyml", "whylabs/whylogs", "SeldonIO/alibi-detect", "deepchecks/deepchecks", "Arize-ai/phoenix"]
 _EXPLAIN = ["shap/shap", "marcotcr/lime", "interpretml/interpret", "pytorch/captum", "SeldonIO/alibi", "Trusted-AI/AIX360", "MAIF/shapash", "oegedijk/explainerdashboard"]
 _LLM_OUTPUT = ["guardrails-ai/guardrails", "NVIDIA/NeMo-Guardrails", "explodinggradients/ragas", "confident-ai/deepeval", "truera/trulens", "Giskard-AI/giskard", "promptfoo/promptfoo", "uptrain-ai/uptrain"]
+# Financial QA benchmarks: an evaluation is a control when it is run
+# before a model is trusted with the numbers it will be asked about.
+_FIN_BENCHMARKS = ["patronus-ai/financebench", "The-FinAI/PIXIU", "The-FinAI/FinBen"]
 _LLM_ATTACK = ["protectai/llm-guard", "protectai/rebuff", "NVIDIA/garak", "Azure/PyRIT", "hf:protectai/deberta-v3-base-prompt-injection-v2", "hf:meta-llama/Llama-Guard-3-8B", "hf:google/shieldgemma-2b"]
 _ADVERSARIAL = ["Trusted-AI/adversarial-robustness-toolbox", "cleverhans-lab/cleverhans", "bethgelab/foolbox", "QData/TextAttack"]
 _PII = ["microsoft/presidio", "protectai/llm-guard", "hf:protectai/deberta-v3-base-prompt-injection-v2"]
@@ -35,30 +38,36 @@ _SUPPLY_CHAIN = ["protectai/modelscan", "sigstore/cosign", "anchore/syft", "anch
 _RESILIENCE = ["BerriAI/litellm", "Netflix/chaosmonkey", "resilience4j/resilience4j"]
 _HUMAN_OVERSIGHT = ["humanlayer/humanlayer", "langchain-ai/langgraph", "guardrails-ai/guardrails"]
 _MARKET_SIM = ["abides-sim/abides", "jpmorganchase/abides-jpmc-public"]
+# Synthetic-data controls: does generated market data keep the real
+# data's structure (fidelity), and does it leak the records it was trained
+# on (privacy)? StonkBench is finance-specific and small; the rest are the
+# general synthetic-data evaluation and membership-inference toolkits.
+_SYNTHETIC_FIDELITY = ["sdv-dev/SDMetrics", "sdv-dev/SDV", "vanderschaarlab/synthcity", "eddisonpham/StonkBench"]
+_SYNTHETIC_PRIVACY = ["privacytrustlab/ml_privacy_meter", "tensorflow/privacy", "vanderschaarlab/synthcity", "gretelai/gretel-synthetics"]
 
 SEEDS: dict[str, list[str]] = {
     # systemic
     "herding_behavior": _MARKET_SIM,
-    "model_convergence": [],
+    "model_convergence": _SYNTHETIC_FIDELITY,
     "liquidity_dry_ups": _MARKET_SIM,
     "flash_crashes": _MARKET_SIM,
     "procyclicality": _MARKET_SIM,
     "market_spirals": _MARKET_SIM,
     "asset_bubbles": [],
     "hidden_interconnectedness": [],
-    "synthetic_correlation": [],
+    "synthetic_correlation": _SYNTHETIC_FIDELITY,
     "geopolitical_brittleness": _DRIFT,
     "regime_shift_failure": _DRIFT,
     # model
     "black_box": _EXPLAIN,
     "lack_of_explainability": _EXPLAIN,
     "auditing_barriers": _EXPLAIN + ["mlflow/mlflow", "IDSIA/sacred"],
-    "hallucinations": _LLM_OUTPUT,
-    "confident_misinformation": _LLM_OUTPUT,
+    "hallucinations": _LLM_OUTPUT + _FIN_BENCHMARKS,
+    "confident_misinformation": _LLM_OUTPUT + _FIN_BENCHMARKS,
     "data_drift": _DRIFT,
     "concept_drift": _DRIFT + ["online-ml/river"],
     "feedback_loops": _MARKET_SIM,
-    "artificial_environment": _MARKET_SIM,
+    "artificial_environment": _MARKET_SIM + _SYNTHETIC_FIDELITY,
     "skills_atrophy": [],
     "operational_blind_spots": _RESILIENCE,
     # cyber
@@ -67,15 +76,15 @@ SEEDS: dict[str, list[str]] = {
     "synthetic_accounts": _DEEPFAKE_VISION + ["Fraud-Detection-Handbook/fraud-detection-handbook"],
     "data_poisoning": _ADVERSARIAL,
     "adversarial_manipulation": _ADVERSARIAL + _LLM_ATTACK,
-    "proprietary_data_leakage": _PII,
-    "ip_exposure": _PII,
+    "proprietary_data_leakage": _PII + _SYNTHETIC_PRIVACY,
+    "ip_exposure": _PII + _SYNTHETIC_PRIVACY,
     "spear_phishing": _LLM_ATTACK,
     "social_engineering": _LLM_ATTACK,
     # legal
     "high_risk_designation": ["mlflow/mlflow", "great-expectations/great_expectations", "fairlearn/fairlearn"],
     "insurance_underwriting_penalties": ["mlflow/mlflow", "fairlearn/fairlearn"],
     "human_oversight_audit_failure": _HUMAN_OVERSIGHT,
-    "professional_accountability": _LLM_OUTPUT,
+    "professional_accountability": _LLM_OUTPUT + _FIN_BENCHMARKS,
     "regulatory_reporting_errors": _DATA_QUALITY,
     "copyright_infringement": ["Data-Provenance-Initiative/Data-Provenance-Collection", "unitaryai/detoxify"],
     "dataset_lawsuits": ["Data-Provenance-Initiative/Data-Provenance-Collection"],
@@ -124,6 +133,8 @@ QUERIES: dict[str, list[str]] = {
     "human_oversight_audit_failure": ["human in the loop approval ai agents"],
     "proprietary_data_leakage": ["pii redaction llm prompts"],
     "regulatory_reporting_errors": ["data validation pipeline quality checks"],
+    "synthetic_correlation": ["synthetic data quality evaluation metrics"],
+    "ip_exposure": ["membership inference attack privacy audit"],
 }
 
 assert set(SEEDS) == SLUGS, "SEEDS must name every risk exactly once"

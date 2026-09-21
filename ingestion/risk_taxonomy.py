@@ -1,6 +1,6 @@
 """
 The granular risks an AI system in finance can carry, and which of them
-each use case carries. Seven families, sixty-one risks. A use case's
+each use case carries. Seven families, fifty-nine risks. A use case's
 risk_tier says how serious; its risk_factors say what of -- this is the
 list the tier is composed of, shown when the tier is tapped in the app.
 

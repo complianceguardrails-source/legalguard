@@ -56,7 +56,7 @@ postgrest postgrest.conf   # see docs/POSTGREST.md for the conf contents
 ### 4. Risk feeds: news and existing guardrails
 
 Two nightly feeds map the outside world onto the risk taxonomy
-(`ingestion/risk_taxonomy.py`: seven families, sixty-one granular risks):
+(`ingestion/risk_taxonomy.py`: seven families, fifty-nine granular risks):
 
 ```bash
 cd ingestion

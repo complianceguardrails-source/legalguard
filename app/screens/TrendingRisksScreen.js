@@ -6,7 +6,8 @@
 // risk chips so a reader can judge it.
 
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, RefreshControl, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, RefreshControl, ActivityIndicator, useWindowDimensions } from "react-native";
+import Svg, { Polyline, Line, Circle, Text as SvgText } from "react-native-svg";
 import { ExternalLink, Landmark, Newspaper } from "lucide-react-native";
 
 import { colors, type, radius } from "../theme";
@@ -14,7 +15,11 @@ import { fetchRiskNews } from "../lib/api";
 import { RISK_FAMILIES, RISK_BY_SLUG } from "../lib/riskTaxonomy";
 
 const FAMILY_LABEL = Object.fromEntries(RISK_FAMILIES.map((f) => [f.key, f.label]));
+// Same family tones as the Guardrails wheel, so a colour means one thing
+// across the app.
+const FAMILY_TONE = { systemic: "#3B3F9E", model: "#0E6B6B", cyber: "#A34A17", legal: "#234FA3", vendor: "#3E5C76", ethical: "#6B2D5C", environmental: "#2E6B3A" };
 const DAY = 24 * 60 * 60 * 1000;
+const CHART_DAYS = 30;
 
 function bucket(story, now) {
   const t = story.published_at ? new Date(story.published_at).getTime() : new Date(story.fetched_at).getTime();
@@ -25,12 +30,55 @@ function bucket(story, now) {
   return "Earlier";
 }
 
+// The year is shown whenever it is not this year: a 2019 story and a
+// story from yesterday must not read the same.
 function when(story) {
   const d = new Date(story.published_at || story.fetched_at);
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  const thisYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(undefined, thisYear ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" });
+}
+
+// Stories per day per family over the last CHART_DAYS days, as lines.
+function TrendLines({ stories, family, width }) {
+  const w = width, h = 150, padL = 26, padR = 10, padT = 10, padB = 22;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = Array.from({ length: CHART_DAYS }, (_, i) => today.getTime() - (CHART_DAYS - 1 - i) * DAY);
+  const series = RISK_FAMILIES.filter((f) => !family || f.key === family).map((f) => ({
+    key: f.key,
+    counts: days.map((d) => stories.filter((s) => {
+      const t = new Date(s.published_at || s.fetched_at); t.setHours(0, 0, 0, 0);
+      return t.getTime() === d && (s.families || []).includes(f.key);
+    }).length),
+  }));
+  const max = Math.max(1, ...series.flatMap((s) => s.counts));
+  const x = (i) => padL + (i * (w - padL - padR)) / (CHART_DAYS - 1);
+  const y = (n) => padT + (h - padT - padB) * (1 - n / max);
+  const ticks = [0, 9, 19, 29];
+  return (
+    <Svg width={w} height={h}>
+      {[0, max].map((n) => (
+        <React.Fragment key={n}>
+          <Line x1={padL} x2={w - padR} y1={y(n)} y2={y(n)} stroke={colors.border} strokeWidth={1} />
+          <SvgText x={padL - 6} y={y(n) + 3} fill={colors.textMuted} fontSize={9} fontFamily={type.fontFamily} textAnchor="end">{n}</SvgText>
+        </React.Fragment>
+      ))}
+      {ticks.map((i) => (
+        <SvgText key={i} x={x(i)} y={h - 6} fill={colors.textMuted} fontSize={9} fontFamily={type.fontFamily} textAnchor="middle">
+          {new Date(days[i]).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+        </SvgText>
+      ))}
+      {series.map((s) => (
+        <React.Fragment key={s.key}>
+          <Polyline points={s.counts.map((n, i) => `${x(i)},${y(n)}`).join(" ")} fill="none" stroke={FAMILY_TONE[s.key]} strokeWidth={2} strokeLinejoin="round" />
+          {s.counts.map((n, i) => (n ? <Circle key={i} cx={x(i)} cy={y(n)} r={2.5} fill={FAMILY_TONE[s.key]} /> : null))}
+        </React.Fragment>
+      ))}
+    </Svg>
+  );
 }
 
 export default function TrendingRisksScreen() {
+  const { width } = useWindowDimensions();
   const [stories, setStories] = useState(null);
   const [family, setFamily] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -64,6 +112,21 @@ export default function TrendingRisksScreen() {
           Stories from trusted financial outlets and regulators, each placed against the risk it reports on. Tap a story to
           read it at the source.
         </Text>
+
+        {!!stories && (
+          <View style={styles.chartCard}>
+            <Text style={styles.chartTitle}>Stories per day, last {CHART_DAYS} days</Text>
+            <TrendLines stories={stories} family={family} width={Math.min(width - 40, 600) - 28} />
+            <View style={styles.chartLegend}>
+              {RISK_FAMILIES.filter((f) => !family || f.key === family).map((f) => (
+                <View key={f.key} style={styles.legendItem}>
+                  <View style={[styles.legendSwatch, { backgroundColor: FAMILY_TONE[f.key] }]} />
+                  <Text style={styles.legendText}>{f.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
           <Chip label="All" count={(stories || []).length} on={!family} onPress={() => setFamily(null)} />
@@ -134,6 +197,12 @@ const styles = StyleSheet.create({
   content: { padding: 20, gap: 14 },
   h1: { fontFamily: type.fontFamilyBold, fontSize: 24, color: colors.textMain, lineHeight: 30 },
   lede: { fontFamily: type.fontFamily, fontSize: 13, color: colors.textMuted, lineHeight: 19 },
+  chartCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 14, gap: 8 },
+  chartTitle: { fontFamily: type.fontFamilyBold, fontSize: 13, color: colors.textMain },
+  chartLegend: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  legendSwatch: { width: 10, height: 10, borderRadius: 2 },
+  legendText: { fontFamily: type.fontFamily, fontSize: 10.5, color: colors.textMuted },
   chips: { flexDirection: "row", gap: 8, paddingVertical: 2 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.chip, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },

@@ -831,17 +831,18 @@ def upsert_guardrail_repo(conn: psycopg.Connection, row: dict) -> None:
             """
             INSERT INTO guardrail_repos
                 (platform, external_id, url, name, description, stars, downloads, language, license,
-                 last_pushed_at, risk_slugs, families, evidence, fetched_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                 last_pushed_at, created_at, risk_slugs, families, evidence, fetched_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
             ON CONFLICT (platform, external_id) DO UPDATE SET
                 url = EXCLUDED.url, name = EXCLUDED.name, description = EXCLUDED.description,
                 stars = EXCLUDED.stars, downloads = EXCLUDED.downloads, language = EXCLUDED.language,
                 license = EXCLUDED.license, last_pushed_at = EXCLUDED.last_pushed_at,
+                created_at = EXCLUDED.created_at,
                 risk_slugs = EXCLUDED.risk_slugs, families = EXCLUDED.families,
                 evidence = EXCLUDED.evidence, fetched_at = now()
             """,
             (row["platform"], row["external_id"], row["url"], row["name"], row.get("description"),
              row.get("stars"), row.get("downloads"), row.get("language"), row.get("license"),
-             row.get("last_pushed_at"), row["risk_slugs"], row["families"], json.dumps(row["evidence"])),
+             row.get("last_pushed_at"), row.get("created_at"), row["risk_slugs"], row["families"], json.dumps(row["evidence"])),
         )
     conn.commit()

@@ -35,6 +35,10 @@ _RISK_KEYWORDS_RAW = {
         "kyc", "aml", "anti-money laundering", "sanctions screening",
         "transaction monitoring", "fraud detection", "hiring", "recruitment",
         "video interview", "employee screening", "credit decision",
+        # systems that place orders: MiFID II Art. 17 algorithmic trading
+        "algorithmic trading", "algo trading", "trading bot", "trading agent", "agent trading",
+        "automated trading", "auto trading", "trading os", "trading system", "order execution",
+        "market making", "high frequency trading", "hft",
     },
     "limited_risk": {
         "chatbot", "conversational agent", "voice assistant", "virtual assistant",
@@ -160,6 +164,10 @@ _KEYWORD_BASIS_RAW = {
     "virtual assistant": "article_50", "customer service bot": "article_50", "generative": "article_50",
     "content generation": "article_50", "copilot": "article_50",
     "recommendation engine": "mifid_advice", "robo-advisor": "mifid_advice",
+    "algorithmic trading": "mifid_algo", "algo trading": "mifid_algo", "trading bot": "mifid_algo",
+    "trading agent": "mifid_algo", "agent trading": "mifid_algo", "automated trading": "mifid_algo",
+    "auto trading": "mifid_algo", "trading os": "mifid_algo", "trading system": "mifid_algo",
+    "order execution": "mifid_algo", "market making": "mifid_algo", "high frequency trading": "mifid_algo", "hft": "mifid_algo",
     "greenwashing": "sustainable_finance", "esg rating": "sustainable_finance", "esg score": "sustainable_finance",
     "esg scoring": "sustainable_finance", "sustainability report": "sustainable_finance",
     "sustainability disclosure": "sustainable_finance", "climate disclosure": "sustainable_finance",

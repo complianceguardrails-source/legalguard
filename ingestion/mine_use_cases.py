@@ -16,7 +16,7 @@ import logging
 import sys
 
 import db
-from sources.github_usecases import mine_use_cases
+from sources.github_usecases import mine_pinned_repos, mine_use_cases
 from sources.bank_org_use_cases import mine_bank_use_cases
 from sources.huggingface_usecases import mine_hf_use_cases
 
@@ -35,9 +35,8 @@ def run() -> None:
     # github_reference_url) so they never collide with the other two --
     # mine_hf_use_cases() already dedupes within itself.
     candidates = mine_use_cases()
-    bank_candidates = mine_bank_use_cases()
     seen_urls = {c["github_reference_url"] for c in candidates}
-    for c in bank_candidates:
+    for c in mine_pinned_repos() + mine_bank_use_cases():
         if c["github_reference_url"] not in seen_urls:
             candidates.append(c)
             seen_urls.add(c["github_reference_url"])
