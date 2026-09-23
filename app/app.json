@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "org.legalguard.app",
-      "buildNumber": "9",
+      "buildNumber": "10",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -43,6 +43,12 @@
       "eas": {
         "projectId": "bc8632c0-2f3e-4a89-89ac-5e0267fa0857"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/bc8632c0-2f3e-4a89-89ac-5e0267fa0857"
     }
   }
 }

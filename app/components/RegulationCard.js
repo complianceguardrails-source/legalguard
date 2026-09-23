@@ -1,7 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Linking } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { FileWarning, ExternalLink, ShieldCheck, ShieldAlert, HelpCircle, Users, Scale, Code2, TrendingUp } from "lucide-react-native";
+import { FileWarning, ExternalLink, ShieldCheck, ShieldAlert, HelpCircle, Users, Scale, TrendingUp } from "lucide-react-native";
 
 import { colors, type, radius } from "../theme";
 import MetadataPill from "./MetadataPill";
@@ -42,7 +41,6 @@ const ORIGIN_DRIVER_LABELS = {
 export default function RegulationCard({ item, selected, onPress }) {
   const badge = SOURCE_BADGE[item.source_url_classification] || SOURCE_BADGE.unknown;
   const BadgeIcon = badge.icon;
-  const navigation = useNavigation();
   const useCaseCount = (item.affected_use_case_ids || []).length;
   const driverLabel = ORIGIN_DRIVER_LABELS[item.origin_driver_category];
 
@@ -89,26 +87,19 @@ export default function RegulationCard({ item, selected, onPress }) {
         </View>
       )}
 
-      {/* One button for a non-technical reader (the actual statute text),
-          one for an engineer (which use cases/guardrails this regulation
-          maps to) -- both real navigations, no placeholder targets. */}
-      <View style={styles.actionRow}>
-        <TouchableOpacity
-          style={[styles.actionButton, !item.source_url && styles.actionButtonDisabled]}
-          disabled={!item.source_url}
-          onPress={() => Linking.openURL(item.source_url)}
-        >
-          <Scale size={12} color={colors.secondary} style={{ marginRight: 5 }} />
-          <Text style={styles.actionButtonText}>View Legal Text</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => navigation.navigate("ImpactDiff", { regId: item.reg_id })}
-        >
-          <Code2 size={12} color={colors.secondary} style={{ marginRight: 5 }} />
-          <Text style={styles.actionButtonText}>View Code Spec</Text>
-        </TouchableOpacity>
-      </View>
+      {/* The statute itself, at its own source. "View Code Spec" used to sit
+          beside this and open the Audit screen's generated policy diff; that
+          screen went when guardrails became existing open-source controls
+          rather than generated policy, and the button was left pointing at a
+          route that no longer exists. */}
+      {!!item.source_url && (
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.actionButton} onPress={() => Linking.openURL(item.source_url)}>
+            <Scale size={12} color={colors.secondary} style={{ marginRight: 5 }} />
+            <Text style={styles.actionButtonText}>Read the regulation</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }

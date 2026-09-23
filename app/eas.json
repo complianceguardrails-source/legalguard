@@ -9,7 +9,8 @@
       "distribution": "internal",
       "ios": {
         "simulator": true
-      }
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
@@ -18,7 +19,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://legalguard-postgrest.onrender.com"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
@@ -27,7 +29,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://legalguard-postgrest.onrender.com"
-      }
+      },
+      "channel": "production"
     }
   },
   "submit": {
