@@ -7,7 +7,7 @@ availability from here.
 ## App Information
 
 - **Name:** LegalGuard
-- **Subtitle** (30 char max): `Linking AI Risks to Guardrails` (exactly 30 -- the previous one was 36 and would have been rejected)
+- **Subtitle** (30 char max): `Responsible AI in Action` (24 chars; the original was 36 and would have been rejected)
 - **Primary category:** Business
 - **Secondary category:** Finance
 - **Age rating:** 4+ (no objectionable content; straightforward business/

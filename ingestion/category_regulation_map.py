@@ -343,9 +343,20 @@ RULES: list[Rule] = [
         _either(_has_category("esg_climate"), _has_basis("sustainable_finance"), lambda uc: _generates_text(uc) and _has_category("portfolio_wealth", "esg_climate", "banking_support", "finance_llm")(uc)),
     ),
     Rule(
+        "spatial_property_valuation", "AVM quality control",
+        "Imagery used to value or verify property feeds a collateral decision, which brings the interagency Automated Valuation Model quality-control standards with it.",
+        AVM_QC, lambda uc: _has_category("spatial_finance")(uc) and _has_category("credit_lending", "insurance")(uc),
+    ),
+    Rule(
+        "spatial_green_claims", "Green claims from imagery",
+        "Earth observation is how a sustainability claim gets verified -- or contradicted. What the imagery is said to show about a product or issuer is a regulated claim under SFDR Art. 13, the UCPD green-claims rules, the FCA anti-greenwashing rule and the SEC Names rule.",
+        SFDR_MARKETING + UCPD_GREEN_CLAIMS + FCA_ANTI_GREENWASHING + SEC_NAMES_RULE,
+        lambda uc: _has_category("spatial_finance")(uc) and _has_category("esg_climate")(uc),
+    ),
+    Rule(
         "eudr_supply_chains", "EU Deforestation Regulation",
         "Binds operators and traders of cattle, cocoa, coffee, palm oil, rubber, soya and wood products -- the bank's clients, not the bank. A system that screens those clients or reads their due-diligence statements feeds an obligation the client must meet; matched only because this system mentions commodity supply chains.",
-        EUDR, lambda uc: _has_category("esg_climate")(uc) and _touches_commodity_chains(uc),
+        EUDR, lambda uc: (_has_category("esg_climate")(uc) or _has_category("spatial_finance")(uc)) and _touches_commodity_chains(uc),
     ),
 
     Rule(

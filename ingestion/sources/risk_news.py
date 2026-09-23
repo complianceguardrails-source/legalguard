@@ -66,6 +66,9 @@ FAMILY_QUERY_FEEDS: list[Feed] = [
     Feed("", "news", _family_query('"concentration risk" OR outage OR "third-party" OR "supply chain attack" OR "open source" vulnerability')),
     Feed("", "news", _family_query('bias OR discrimination OR redlining OR "vulnerable customers" OR "robo-advisers"')),
     Feed("", "news", _family_query('"data centre" OR "data center" OR greenwashing OR "net zero" OR "carbon" OR "water"')),
+    # Spatial finance controversies: imagery as alternative data, satellite
+    # verification of green claims, and location data as surveillance.
+    Feed("", "news", _family_query('"satellite imagery" OR "satellite data" OR "alternative data" OR "geospatial" OR "location data"')),
 ]
 
 

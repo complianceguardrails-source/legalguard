@@ -723,7 +723,7 @@ def fetch_use_cases_for_risk_basis(conn: psycopg.Connection) -> list[dict]:
     supports on its own."""
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, name, description, source, risk_tier, risk_basis, model_card_text "
+            "SELECT id, name, description, source, risk_tier, risk_basis, model_card_text, categories "
             "FROM banking_use_cases WHERE risk_tier <> 'unclassified' ORDER BY name"
         )
         cols = [d.name for d in cur.description]

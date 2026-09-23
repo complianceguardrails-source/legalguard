@@ -37,7 +37,8 @@ RISK_PHRASES: dict[str, list[str]] = {
     "procyclicality": ["procyclical*", "pro-cyclical*", "amplif*", "amplifies", "amplifying"],
     "market_spirals": ["downward spiral", "selling spiral", "doom loop", "panic selling", "sell-off accelerat*", "selloff accelerat*"],
     "asset_bubbles": ["bubble", "overheat*", "frothy", "froth", "mania"],
-    "hidden_interconnectedness": ["interconnected*", "interconnectedness", "hidden correlation", "alternative data", "contagion"],
+    "hidden_interconnectedness": ["interconnected*", "interconnectedness", "hidden correlation", "alternative data", "contagion",
+                                  "satellite data", "satellite imagery", "geospatial data", "alt data"],
     "synthetic_correlation": ["correlated", "correlation", "diversification", "diversified"],
     "geopolitical_brittleness": ["black swan", "geopolitical shock", "geopolitical risk", "tariff shock", "war shock"],
     "regime_shift_failure": ["regime shift", "regime change", "structural shift", "inflation shock", "rate shock", "stagflation"],
@@ -69,7 +70,7 @@ RISK_PHRASES: dict[str, list[str]] = {
                                  "prompt injection", "jailbreak*", "tricked into", "model guardrail*", "bypass*"],
     "proprietary_data_leakage": ["data leak", "leaked", "leak of", "trade secret", "confidential data", "shared confidential", "uploaded confidential", "pasted into"],
     "ip_exposure": ["customer data exposed", "customer data leak", "exposed customer", "privacy breach", "data breach*", "personal data exposed",
-                     "data privacy", "privacy risk*", "customer data"],
+                     "data privacy", "privacy risk*", "customer data", "location data", "location tracking", "geolocation"],
     "spear_phishing": ["phishing*", "spear-phishing", "spear phishing", "impersonat*", "ceo fraud", "executive impersonation", "business email compromise", "smishing"],
     # AI used offensively against the firm: the taxonomy has no separate
     # "AI as attacker" risk, and this is the one it fits -- an automated
@@ -106,7 +107,8 @@ RISK_PHRASES: dict[str, list[str]] = {
     "data_center_downtime": ["data centre", "data center", "datacenter", "datacentre"],
     "e_waste": ["e-waste", "ewaste", "electronic waste", "gpu waste", "hardware waste", "obsolete hardware"],
     "circular_economy_failures": ["circular economy", "recycl*", "hardware refresh", "replacement cycle"],
-    "green_bleaching": ["green-bleaching", "greenbleaching", "misclassif*", "esg rating", "esg score", "esg data", "sustainability rating"],
+    "green_bleaching": ["green-bleaching", "greenbleaching", "misclassif*", "esg rating", "esg score", "esg data", "sustainability rating",
+                        "satellite monitoring", "remote sensing", "deforestation", "carbon credit*", "offset*"],
     "transition_portfolio_risk": ["transition risk", "stranded asset", "carbon tax", "carbon price", "carbon pricing", "climate stress test"],
     "high_emission_optimization": ["fossil fuel", "oil and gas", "coal", "capital into fossil", "high-emission", "high emission"],
 }

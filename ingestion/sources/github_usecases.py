@@ -116,6 +116,25 @@ DEFAULT_QUERIES = [
     # "specific system vs. generic list" noise. Future runs of this query
     # should get the same finance-relevance check, not just a noise check.
     '"biodiversity credit" in:name,description,readme',
+    # Spatial finance: geospatial evidence behind a financial decision.
+    # Scoped to name+description rather than readme -- the readme scope
+    # returns the big "awesome" lists, which mention everything and
+    # implement nothing.
+    "satellite imagery insurance in:name,description",
+    '"crop yield" commodity OR trading OR insurance in:name,description',
+    '"deforestation" "due diligence" OR "supply chain" in:name,description',
+    "property valuation satellite OR aerial imagery in:name,description",
+    "flood risk mapping machine learning in:name,description",
+    "catastrophe risk model in:name,description",
+    "vessel tracking AIS analytics in:name,description",
+    '"climate risk" finance in:name,description',
+    '"remote sensing" mortgage OR lending in:name,description',
+    '"satellite" "real estate" in:name,description',
+    '"supply chain" satellite monitoring in:name,description',
+    "parametric insurance in:name,description",
+    "crop insurance remote sensing in:name,description",
+    "physical climate risk in:name,description",
+    "carbon credit verification satellite in:name,description",
     # Generative market models: diffusion / GAN / flow models that produce
     # synthetic financial time series or simulate order books. They are
     # AI systems whose output is a market, so they carry the systemic and
@@ -176,6 +195,13 @@ PINNED_REPOS = [
     "patronus-ai/financebench",
     "georgezouq/awesome-ai-in-finance",
     "hananedupouy/LLMs-in-Finance",
+    # Spatial finance: OS-Climate is the Linux Foundation's climate-risk
+    # effort, the same kind of consortium artefact as FINOS, and physrisk
+    # is the engine banks actually cite for physical risk.
+    "os-climate/physrisk",
+    "os-climate/hazard",
+    "os-climate/ITR",
+    "etherisc-legacy/HurricaneGuard",
     # generative market models and the finance decision-model system
     "EmmanuelleB985/FinDiffusion",
     "LeonardoBerti00/DeepMarket",

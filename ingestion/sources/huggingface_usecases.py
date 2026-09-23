@@ -108,6 +108,12 @@ DEFAULT_QUERIES = [
     "financial question answering",
     "KYC verification",
     "anti money laundering",
+    # Spatial finance: the query is the financial application, not the
+    # sensor -- "satellite" alone returns generic segmentation models with
+    # no financial use whatever.
+    "property valuation satellite",
+    "flood risk prediction",
+    "catastrophe risk",
 ]
 
 # (tag, minimum downloads). See the module docstring for why "finance"

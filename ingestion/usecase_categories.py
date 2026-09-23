@@ -56,6 +56,7 @@ CATEGORY_LABELS: dict[str, str] = {
     "tax_accounting": "Tax & Accounting",
     "esg_climate": "ESG, Climate & Nature",
     "fraud_aml": "Fraud & AML",
+    "spatial_finance": "Spatial Finance",
 }
 
 CATEGORY_KEYWORDS: dict[str, list[str]] = {
@@ -139,6 +140,21 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
         "fraud", "anti money", "money launder", "aml", "sanction", "kyc", "suspicious", "scam",
         "phishing", "反洗钱",
     ],
+    # Spatial finance: geospatial evidence used for a financial decision --
+    # property and collateral valuation, catastrophe and flood exposure,
+    # crop yield behind a commodity position, deforestation and green-claim
+    # verification, vessel movement for trade finance. Every term is either
+    # unambiguously geospatial ("remote sensing") or geospatial-financial in
+    # itself ("crop yield", "catastrophe model"); bare "imagery" and
+    # "mapping" are left out because they carry no such meaning.
+    "spatial_finance": [
+        "satellite", "geospatial", "remote sensing", "earth observation", "aerial imagery",
+        "building imagery", "property imagery", "hyperspectral",
+        "sentinel-2", "sentinel 2", "landsat", "ndvi", "land cover", "land use",
+        "cadastr", "parcel boundar", "geolocation data",
+        "crop yield", "catastrophe model", "cat model", "flood risk", "wildfire risk",
+        "deforestation", "vessel tracking", "ais data", "spatial finance", "natural capital",
+    ],
 }
 
 CATEGORIES: list[str] = list(CATEGORY_KEYWORDS)
@@ -187,9 +203,17 @@ def _describing_name(name: str) -> str:
 # (hashgraph/guardian); add to it as more turn up.
 CATEGORY_NEUTRAL_PHRASES: dict[str, list[str]] = {
     "fraud_aml": ["fraud proof", "fraud resistant", "fraud resistance", "fraudproof", "anti fraud proof"],
+    # a complaint to an environmental agency is not a bank complaint
+    "banking_support": ["citizen complaint", "environmental complaint", "environmental agenc", "public complaint"],
     # trade-finance instruments are "credit" in name only; consumer and
     # corporate lending vocabulary is what credit_lending is for
-    "credit_lending": ["letters of credit", "letter of credit", "documentary credit", "credit note", "credit notes"],
+    "credit_lending": ["letters of credit", "letter of credit", "documentary credit", "credit note", "credit notes",
+                       # a carbon credit is an emissions unit, not lending
+                       "carbon credit", "carbon credits", "carbon-credit", "biodiversity credit", "offset credit"],
+    # "satellite" in portfolio construction means a satellite holding
+    # around a core, nothing to do with orbit.
+    "spatial_finance": ["core satellite", "satellite strategie", "satellite strategy", "satellite holding",
+                        "satellite portfolio", "satellite position", "core-satellite"],
 }
 
 
@@ -226,6 +250,29 @@ def _neutralised(text: str, category: str) -> str:
     return text
 
 
+# Categories that describe *how* a system works rather than what part of
+# finance it serves. On their own they do not make something a financial
+# use case -- a remote-sensing segmentation model is computer vision, not
+# spatial finance, until it values collateral or prices a catastrophe. So
+# they are kept only alongside a category that is financial in itself.
+QUALIFIER_CATEGORIES = {"spatial_finance"}
+
+# ESG is thematic rather than sectoral, and it shares vocabulary with
+# spatial finance ("deforestation", "natural capital"), so letting it
+# qualify makes the test vacuous: a forest-monitoring CV project would
+# match both and call itself financial. Spatial finance has to sit beside
+# a category that names a part of finance -- lending, insurance, trading,
+# sanctions, reporting -- which is what a green mortgage or a deforestation
+# due-diligence system does and a segmentation model does not.
+NON_QUALIFYING = QUALIFIER_CATEGORIES | {"esg_climate"}
+
+
+def _require_qualifier(found: set[str]) -> set[str]:
+    if found - NON_QUALIFYING:
+        return found
+    return found - QUALIFIER_CATEGORIES
+
+
 def categorise_with_evidence(name: str, description: str | None, evidence: str | None) -> dict[str, list[str]]:
     """Category slug -> the phrases that put it there, so a reader can see
     why a regulation was placed against a category and disagree with it."""
@@ -237,7 +284,8 @@ def categorise_with_evidence(name: str, description: str | None, evidence: str |
             out[cat] = hits
     for cat in DECLARED_CATEGORIES.get(name, []):
         out.setdefault(cat, ["declared"])
-    return out
+    kept = _require_qualifier(set(out))
+    return {c: hits for c, hits in out.items() if c in kept}
 
 
 def assign_categories(name: str, description: str | None, evidence: str | None) -> list[str]:
@@ -251,4 +299,5 @@ def assign_categories(name: str, description: str | None, evidence: str | None) 
         if any(_keyword_matches(k, _neutralised(text, cat)) for k in kws)
     }
     found.update(DECLARED_CATEGORIES.get(name, []))
+    found = _require_qualifier(found)
     return [cat for cat in CATEGORY_KEYWORDS if cat in found]

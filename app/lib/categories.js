@@ -43,6 +43,7 @@ export const CATEGORIES = [
   { slug: "tax_accounting", label: "Tax & Accounting", tone: TONES.ochre },
   { slug: "esg_climate", label: "ESG, Climate & Nature", tone: TONES.green },
   { slug: "fraud_aml", label: "Fraud & AML", tone: TONES.plum },
+  { slug: "spatial_finance", label: "Spatial Finance", tone: TONES.steel },
 ];
 
 const BY_SLUG = Object.fromEntries(CATEGORIES.map((c) => [c.slug, c]));

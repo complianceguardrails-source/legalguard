@@ -38,15 +38,24 @@ def recompute_phrase_tiers(dry_run: bool) -> None:
                 continue
             explained = explain_risk_tier(row["name"], evidence_for(row), [])
             if not explained:
+                # A mined row is tiered at mining time and no basis is
+                # kept. When its text supports no phrase, the category
+                # default is the honest account of where the tier came
+                # from -- better than the app saying "set by hand".
+                explained = default_risk_for_categories(row.get("categories") or [])
+            if not explained:
                 continue
             if explained["tier"] != row["risk_tier"]:
                 outcomes[f"{row['risk_tier']}->{explained['tier']}"] += 1
                 if not dry_run:
                     db.update_risk_tier(conn, row["id"], explained["tier"])
                     db.set_risk_basis(conn, row["id"], explained)
-            elif (row["risk_basis"] or {}).get("from") == "category_default":
-                # text now supports the same tier: record the phrase basis
-                outcomes["basis_upgraded"] += 1
+            elif not row.get("risk_basis") or (row["risk_basis"] or {}).get("from") == "category_default":
+                # The tier is right but its working was never stored --
+                # a mined row is tiered at mining time and the basis is
+                # dropped -- or it was a category default the text now
+                # supports. Either way, record how it was reached.
+                outcomes["basis_recorded"] += 1
                 if not dry_run:
                     db.set_risk_basis(conn, row["id"], explained)
     logger.info("Recompute: %s", dict(outcomes))
