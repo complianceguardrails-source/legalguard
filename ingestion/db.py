@@ -693,7 +693,7 @@ def fetch_use_cases_for_categorisation(conn: psycopg.Connection) -> list[dict]:
     and a hand-entered row does that as much as a mined one."""
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, name, description, source, categories, model_card_text, llm_evidence_text "
+            "SELECT id, name, description, source, categories, model_card_text, llm_evidence_text, translation "
             "FROM banking_use_cases ORDER BY name"
         )
         cols = [d.name for d in cur.description]
@@ -876,19 +876,20 @@ def upsert_finos_entry(conn: psycopg.Connection, row: dict) -> None:
 def upsert_translatable_use_case(conn: psycopg.Connection, *, name: str, parent_sector: str, modality: str,
                                  description: str, github_reference_url: str | None, hf_model_id: str | None,
                                  risk_tier: str | None, categories: list[str], translation: dict) -> bool:
-    """An earth-observation capability that was not built for finance, with
-    the financial decision it could feed. Marked 'translatable' so the app
-    never shows it as a system already doing that job."""
+    """An earth-observation capability with the financial decision it could
+    feed (spatial_translation.py). It sits in the catalogue with every
+    other use case; translation carries the application it is labelled
+    with and what a firm would have to supply first."""
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO banking_use_cases
                 (name, parent_sector, modality, description, github_reference_url, hf_model_id,
-                 risk_tier, source, categories, applicability, translation)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'translatable', %s)
+                 risk_tier, source, categories, translation)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (name) DO UPDATE SET
                 description = EXCLUDED.description, categories = EXCLUDED.categories,
-                applicability = 'translatable', translation = EXCLUDED.translation, updated_at = now()
+                translation = EXCLUDED.translation, updated_at = now()
             RETURNING (xmax = 0) AS inserted
             """,
             (name, parent_sector, modality, description, github_reference_url, hf_model_id, risk_tier,

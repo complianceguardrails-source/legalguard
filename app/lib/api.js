@@ -33,11 +33,7 @@ async function getJson(path, fallback) {
 // user-submitted rows stay in the database (the classification pipeline
 // runs on them too) but are not presented as real-world cases.
 const PUBLISHED_SOURCES = "github_mined,huggingface_mined";
-// 'deployed' is a system built for finance. Earth-observation capabilities
-// that a firm could adapt are stored as 'translatable' and never appear in
-// the catalogue, its counts or its decks -- they have their own screen, so
-// a card is never mistaken for a system already doing the job.
-const PUBLISHED_FILTER = `source=in.(${PUBLISHED_SOURCES})&categories=not.is.null&applicability=eq.deployed`;
+const PUBLISHED_FILTER = `source=in.(${PUBLISHED_SOURCES})&categories=not.is.null`;
 
 export async function fetchUseCases() {
   // PostgREST auto-exposes tables as REST resources: GET /banking_use_cases.
@@ -243,12 +239,3 @@ export async function fetchFinosFramework() {
   return getJson("/finos_framework_entries?select=*&order=kind,sequence", []);
 }
 
-/** Earth-observation systems not built for finance, each with the
- * financial decision it could feed (migration 016). Kept separate from
- * fetchUseCases on purpose. */
-export async function fetchTranslatableUseCases() {
-  return getJson(
-    `/banking_use_cases?select=*&source=in.(${PUBLISHED_SOURCES})&applicability=eq.translatable&order=name`,
-    []
-  );
-}

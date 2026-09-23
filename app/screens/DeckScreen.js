@@ -13,7 +13,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { ArrowLeft, RotateCcw, Search, ChevronRight } from "lucide-react-native";
 
 import { colors, type, radius } from "../theme";
-import { fetchUseCases, fetchTranslatableUseCases } from "../lib/api";
+import { fetchUseCases } from "../lib/api";
 import { categoryLabel } from "../lib/categories";
 import { getDiscoverState, toggleStar, clearDismissed } from "../lib/discoverState";
 import UseCaseCard from "../components/UseCaseCard";
@@ -39,8 +39,8 @@ export default function DeckScreen({ route, navigation }) {
   const pan = useRef(new Animated.ValueXY()).current;
 
   useEffect(() => {
-    (mode === "translatable" ? fetchTranslatableUseCases() : fetchUseCases()).then(setAll);
-  }, [mode]);
+    fetchUseCases().then(setAll);
+  }, []);
   useFocusEffect(
     React.useCallback(() => {
       getDiscoverState().then((s) => setState({ starred: s.starred, dismissed: s.dismissed }));
@@ -54,8 +54,6 @@ export default function DeckScreen({ route, navigation }) {
     const pool =
       mode === "starred"
         ? all.filter((uc) => starred.has(uc.id))
-        : mode === "translatable"
-        ? all
         : all.filter(
             (uc) => !dismissed.has(uc.id) && (slugs.length === 0 || (uc.categories || []).some((s) => slugs.includes(s)))
           );
@@ -130,7 +128,6 @@ export default function DeckScreen({ route, navigation }) {
 
   const title =
     mode === "starred" ? "Starred"
-    : mode === "translatable" ? "Adaptable capabilities"
     : slugs.length ? slugs.map(categoryLabel).join(" · ")
     : "All use cases";
 
@@ -144,12 +141,6 @@ export default function DeckScreen({ route, navigation }) {
         <Text style={styles.counter}>{all && current ? `${at + 1} of ${deck.length}` : ""}</Text>
       </View>
 
-      {mode === "translatable" && (
-        <Text style={styles.modeNote}>
-          Earth-observation systems one step from a financial use. Each card names the decision it could feed, and what it
-          would take to get there.
-        </Text>
-      )}
       {!all ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} />
       ) : !current ? (
@@ -203,7 +194,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   topBar: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 12 },
   topTitle: { flex: 1, fontFamily: type.fontFamilyMedium, fontSize: 15.5, color: colors.textMain },
-  modeNote: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMuted, paddingHorizontal: 20, paddingBottom: 8, lineHeight: 18 },
   counter: { fontFamily: type.fontFamily, fontSize: 13.5, color: colors.textMuted, fontVariant: ["tabular-nums"] },
   stage: { flex: 1, alignItems: "center", justifyContent: "center" },
   under: { position: "absolute", transform: [{ scale: 0.95 }, { translateY: 14 }], opacity: 0.7 },

@@ -33,7 +33,7 @@ export default function UseCaseCard({ useCase, width, height, starred, onToggleS
       )}
 
       <View style={styles.body}>
-        {useCase.applicability === "translatable" && !!useCase.translation?.application_short && (
+        {!!useCase.translation?.application_short && (
           <View style={styles.adaptBadge}>
             <Text style={styles.adaptBadgeText}>{useCase.translation.application_short}</Text>
           </View>

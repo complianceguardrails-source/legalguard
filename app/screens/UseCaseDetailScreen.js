@@ -152,7 +152,7 @@ export default function UseCaseDetailScreen({ route, navigation }) {
       </View>
 
       <View style={styles.section}>
-        {useCase.applicability === "translatable" && !!useCase.translation && (
+        {!!useCase.translation && (
           <View style={styles.translation}>
             <Text style={styles.translationTitle}>{useCase.translation.application_short || "Adaptable to finance"}</Text>
             <Text style={styles.translationLabel}>What it does today</Text>

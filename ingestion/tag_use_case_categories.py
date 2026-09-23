@@ -52,6 +52,13 @@ def run(dry_run: bool, review_file: Path | None) -> None:
 
         for row in rows:
             cats = assign_categories(row["name"], row.get("description"), evidence_for(row))
+            # A geospatial capability's financial categories come from the
+            # application stated for it (spatial_translation.py), not from
+            # its own description -- a building-footprint model says
+            # nothing about mortgages. Keep them.
+            translation = row.get("translation") or {}
+            if translation.get("categories"):
+                cats = sorted(set(cats) | set(translation["categories"]), key=CATEGORIES.index)
             per_row[len(cats)] += 1
             for c in cats:
                 sizes[c] += 1

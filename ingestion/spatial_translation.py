@@ -135,3 +135,16 @@ def translate(name: str, description: str | None) -> Translation | None:
 
 def all_queries() -> list[str]:
     return [q for t in TRANSLATIONS for q in t.queries]
+
+
+# The Hub's search matches model ids, so the queries are the words that
+# appear in a model's name rather than GitHub's field-scoped syntax.
+HF_QUERIES = [
+    "building footprint", "flood segmentation", "crop classification", "land cover",
+    "change detection satellite", "burned area", "methane", "vessel detection",
+    "remote sensing", "satellite segmentation", "prithvi", "terramind",
+]
+
+
+def hf_queries() -> list[str]:
+    return HF_QUERIES

@@ -18,7 +18,8 @@ from collections import Counter
 
 import db
 from sources.github_usecases import mine_use_cases
-from spatial_translation import all_queries, translate
+from sources.huggingface_usecases import mine_hf_use_cases
+from spatial_translation import all_queries, hf_queries, translate
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("legalguard.spatial_translatable")
@@ -28,6 +29,7 @@ MIN_STARS = 5  # above the general floor: these are adaptations, not finds
 
 def run(dry_run: bool) -> None:
     candidates = mine_use_cases(queries=all_queries(), min_stars=MIN_STARS)
+    candidates += mine_hf_use_cases(queries=hf_queries(), tags=[])
     by_capability: Counter[str] = Counter()
     rows = []
     for c in candidates:
@@ -56,7 +58,12 @@ def run(dry_run: bool) -> None:
                 hf_model_id=c.get("hf_model_id"), risk_tier=c.get("risk_tier"),
                 categories=["spatial_finance"] + t.categories,
                 translation={"rule": t.id, "capability": t.capability, "application": t.application,
-                             "application_short": t.application_short, "prerequisite": t.prerequisite},
+                             "application_short": t.application_short, "prerequisite": t.prerequisite,
+                             # spatial_finance included: these rows are the
+                             # category, and the keyword tagger cannot see
+                             # it from a description that says only
+                             # "semantic segmentation".
+                             "categories": ["spatial_finance"] + t.categories},
             )
     logger.info("Done: %d new, %d already stored", new, len(rows) - new)
 
