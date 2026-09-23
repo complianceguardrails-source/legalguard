@@ -7,7 +7,7 @@ availability from here.
 ## App Information
 
 - **Name:** LegalGuard
-- **Subtitle** (30 char max): `AI Regulation Guardrail Orchestrator`
+- **Subtitle** (30 char max): `Linking AI Risks to Guardrails` (exactly 30 -- the previous one was 36 and would have been rejected)
 - **Primary category:** Business
 - **Secondary category:** Finance
 - **Age rating:** 4+ (no objectionable content; straightforward business/

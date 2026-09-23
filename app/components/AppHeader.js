@@ -17,7 +17,7 @@ export default function AppHeader() {
         <View style={{ flexShrink: 1 }}>
           <Text style={styles.title}>LegalGuard</Text>
           <Text style={styles.subtitle} numberOfLines={1}>
-            Guardrail Orchestrator for Regulated AI
+            Linking AI Risks to Guardrails
           </Text>
         </View>
       </View>
