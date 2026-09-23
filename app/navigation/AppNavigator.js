@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Compass, Radar, Telescope, Newspaper, ShieldCheck } from "lucide-react-native";
 
 import { colors, type } from "../theme";
+import { WhatsNewProvider, useWhatsNew } from "../lib/whatsNewContext";
 import AppHeader from "../components/AppHeader";
 import DashboardScreen from "../screens/DashboardScreen";
 import HorizonScreen from "../screens/HorizonScreen";
@@ -31,7 +32,8 @@ function DiscoverFlow() {
   );
 }
 
-export default function AppNavigator() {
+function Tabs() {
+  const { counts } = useWhatsNew();
   return (
     <Tab.Navigator
       initialRouteName="DiscoverFlow"
@@ -41,6 +43,7 @@ export default function AppNavigator() {
         tabBarInactiveTintColor: colors.textMuted,
         tabBarLabelStyle: { fontFamily: type.fontFamilyMedium, fontSize: 11 },
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
+        tabBarBadgeStyle: { backgroundColor: colors.accent, color: colors.primary, fontFamily: type.fontFamilyBold, fontSize: 10.5 },
       }}
     >
       {/* Five tabs: Discover (use cases and their risks), Trending (today's
@@ -56,6 +59,7 @@ export default function AppNavigator() {
           title: "Discover",
           tabBarLabel: "Discover",
           tabBarIcon: ({ color, size }) => <Compass color={color} size={size} />,
+          tabBarBadge: counts.useCases || undefined,
         }}
       />
       <Tab.Screen
@@ -65,6 +69,7 @@ export default function AppNavigator() {
           title: "Trending Risks",
           tabBarLabel: "Trending",
           tabBarIcon: ({ color, size }) => <Newspaper color={color} size={size} />,
+          tabBarBadge: counts.stories || undefined,
         }}
       />
       <Tab.Screen
@@ -83,6 +88,7 @@ export default function AppNavigator() {
           title: "LegalGuard",
           tabBarLabel: "Radar",
           tabBarIcon: ({ color, size }) => <Radar color={color} size={size} />,
+          tabBarBadge: counts.regulations || undefined,
         }}
       />
       <Tab.Screen
@@ -95,5 +101,13 @@ export default function AppNavigator() {
         }}
       />
     </Tab.Navigator>
+  );
+}
+
+export default function AppNavigator() {
+  return (
+    <WhatsNewProvider>
+      <Tabs />
+    </WhatsNewProvider>
   );
 }

@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { View, Text, ScrollView, StyleSheet, RefreshControl } from "react-native";
 import { Database, Scale, ShieldCheck } from "lucide-react-native";
 
 import { colors, type, radius } from "../theme";
 import { fetchPendingRegulations, fetchUseCaseCount, fetchRegulationCount, fetchGuardrailRepoCount } from "../lib/api";
 import RegulationCard from "../components/RegulationCard";
+import { useSeen } from "../lib/whatsNewContext";
 
 export default function DashboardScreen() {
   // All three tiles are real counts from the shared reference database:
@@ -16,6 +18,7 @@ export default function DashboardScreen() {
   const [pendingRegulations, setPendingRegulations] = useState([]);
   const [totalPending, setTotalPending] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  useFocusEffect(useSeen("regulations"));
 
   const load = useCallback(async () => {
     const [ucCount, regCount, grCount, pending] = await Promise.all([

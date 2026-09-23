@@ -72,6 +72,7 @@ this app -- is open source and free to self-host.
 • Existing open-source guardrails per risk
 • Trending: daily AI-risk stories from financial outlets and regulators
 • Sustainable-finance rules: SFDR, Taxonomy, CSRD, green claims, EUDR, BNG
+• New-since-your-last-visit counts on Discover, Trending and Radar
 • Removed the GitHub dispatch flow; no account connection needed
 ```
 
@@ -94,8 +95,8 @@ Based on the actual implementation:
 
 - **Data collected linked to the user:** None. The app has no account,
   no sign-in and no token; it reads a public database.
-- **Data collected but not linked to identity:** None. Starred and
-  dismissed cards are stored only on the device.
+- **Data collected but not linked to identity:** None. Starred cards,
+  dismissed cards and last-visit timestamps stay on the device.
 - **Third-party data sharing:** None. Tapping a story or a repository
   opens the outlet's or platform's own site in the browser.
 - **Tracking:** None. No advertising identifiers, no analytics SDKs.

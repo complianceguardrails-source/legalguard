@@ -56,6 +56,15 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python ingest_risk_news.py
 
+      - name: Refresh the FINOS AI Governance Framework
+        # 23 risks and 23 controls with their EU AI Act / ISO 42001 / NIST
+        # references, plus this app's crosswalk onto its own risks.
+        working-directory: ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python ingest_finos_framework.py
+
       - name: Refresh guardrail repositories
         # Re-resolves every seed and search (stars, last push, new results).
         # GITHUB_TOKEN is the workflow's own token: 1,000 req/hour is plenty.
@@ -74,3 +83,11 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python generate_horizon_forecasts.py
+
+      - name: Place forecasts against use-case categories
+        # Which categories a forthcoming regulation would reach, matched
+        # from the forecast's own text with the use-case vocabulary.
+        working-directory: ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python tag_horizon_categories.py

@@ -214,3 +214,27 @@ export async function fetchGuardrailRepos({ limit = 500 } = {}) {
 export async function fetchGuardrailRepoCount() {
   return fetchExactCount("/guardrail_repos?select=repo_id&limit=1", 0);
 }
+
+// --- "New since you last looked" -------------------------------------
+// Counts only; the rows themselves are fetched by the screens as usual.
+// A use case or regulation is new when it was first stored after that
+// moment; a story, when it was first fetched after it.
+
+export async function countNewUseCases(sinceIso) {
+  return fetchExactCount(`/banking_use_cases?select=id&${PUBLISHED_FILTER}&created_at=gt.${encodeURIComponent(sinceIso)}&limit=1`, 0);
+}
+
+export async function countNewRegulations(sinceIso) {
+  return fetchExactCount(`/specific_regulations?select=reg_id&created_at=gt.${encodeURIComponent(sinceIso)}&limit=1`, 0);
+}
+
+export async function countNewStories(sinceIso) {
+  return fetchExactCount(`/risk_news_stories?select=story_id&fetched_at=gt.${encodeURIComponent(sinceIso)}&limit=1`, 0);
+}
+
+/** The FINOS AI Governance Framework: 23 risks and 23 mitigations, with
+ * their EU AI Act / ISO 42001 / NIST references and the crosswalk onto
+ * this app's own risks (migration 015). */
+export async function fetchFinosFramework() {
+  return getJson("/finos_framework_entries?select=*&order=kind,sequence", []);
+}

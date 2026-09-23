@@ -846,3 +846,28 @@ def upsert_guardrail_repo(conn: psycopg.Connection, row: dict) -> None:
              row.get("last_pushed_at"), row.get("created_at"), row["risk_slugs"], row["families"], json.dumps(row["evidence"])),
         )
     conn.commit()
+
+
+def upsert_finos_entry(conn: psycopg.Connection, row: dict) -> None:
+    """One row per FINOS framework entry; a re-run refreshes it in place."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO finos_framework_entries
+                (external_id, kind, sequence, title, type_code, type_label, doc_status, summary,
+                 framework_references, mitigates, risk_slugs, crosswalk_note, url, fetched_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+            ON CONFLICT (external_id) DO UPDATE SET
+                kind = EXCLUDED.kind, sequence = EXCLUDED.sequence, title = EXCLUDED.title,
+                type_code = EXCLUDED.type_code, type_label = EXCLUDED.type_label,
+                doc_status = EXCLUDED.doc_status, summary = EXCLUDED.summary,
+                framework_references = EXCLUDED.framework_references, mitigates = EXCLUDED.mitigates,
+                risk_slugs = EXCLUDED.risk_slugs, crosswalk_note = EXCLUDED.crosswalk_note,
+                url = EXCLUDED.url, fetched_at = now()
+            """,
+            (row["external_id"], row["kind"], row["sequence"], row["title"], row.get("type_code"),
+             row.get("type_label"), row.get("doc_status"), row.get("summary"),
+             json.dumps(row.get("references") or {}), row.get("mitigates") or None,
+             row.get("risk_slugs") or None, row.get("crosswalk_note"), row["url"]),
+        )
+    conn.commit()

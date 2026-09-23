@@ -54,15 +54,28 @@ RISK_PHRASES: dict[str, list[str]] = {
     "skills_atrophy": ["deskilling", "de-skilling", "skills atrophy", "skill atrophy", "lose the skills", "over-reliance", "overreliance", "over reliance"],
     "operational_blind_spots": ["outage", "went down", "system failure", "systems failed", "downtime", "glitch", "it failure", "manual fallback", "manual workaround"],
     # --- cyber ---
-    "biometric_spoofing": ["biometric*", "face id", "facial recognition", "liveness", "video cloning", "video deepfake", "face swap"],
-    "voice_clone_bypass": ["voice clon*", "voice-clon*", "cloned voice", "synthetic voice*", "voice deepfake", "voiceprint", "voice authentication", "voice id"],
-    "synthetic_accounts": ["synthetic identit*", "synthetic identity", "fake account", "fraudulent account", "mule account", "account opening fraud"],
+    "biometric_spoofing": ["biometric*", "face id", "facial recognition", "liveness", "video cloning", "video deepfake", "face swap",
+                            "deepfake*", "deep fake*", "spoof*", "kyc check", "identity verification"],
+    "voice_clone_bypass": ["voice clon*", "voice-clon*", "cloned voice", "synthetic voice*", "voice deepfake", "voiceprint", "voice authentication", "voice id", "vishing"],
+    # The family is "cybersecurity, data security and fraud": a story about
+    # fraud in banking belongs here, whether the AI is committing it or
+    # detecting it. "fraud" on its own is enough; it is not a word that
+    # turns up in finance coverage by accident.
+    "synthetic_accounts": ["synthetic identit*", "fake account*", "fraudulent account*", "mule account*", "account opening fraud",
+                           "fraud", "frauds", "fraudster*", "scam*", "account takeover", "identity fraud", "identity theft",
+                           "payment fraud", "fraud ring", "money launder*", "anti money laundering", "aml", "financial crime"],
     "data_poisoning": ["data poisoning", "poisoned data", "poisoning attack", "tainted data", "corrupt the training"],
-    "adversarial_manipulation": ["adversarial*", "manipulate the model", "gaming the model", "game the algorithm", "trick the model", "prompt injection", "jailbreak"],
+    "adversarial_manipulation": ["adversarial*", "manipulate the model", "gaming the model", "game the algorithm", "trick the model",
+                                 "prompt injection", "jailbreak*", "tricked into", "model guardrail*", "bypass*"],
     "proprietary_data_leakage": ["data leak", "leaked", "leak of", "trade secret", "confidential data", "shared confidential", "uploaded confidential", "pasted into"],
-    "ip_exposure": ["customer data exposed", "customer data leak", "exposed customer", "privacy breach", "data breach*", "personal data exposed"],
-    "spear_phishing": ["phishing*", "spear-phishing", "spear phishing", "impersonat*", "ceo fraud", "executive impersonation", "business email compromise"],
-    "social_engineering": ["social engineering", "wire transfer fraud", "fraudulent transfer", "invoice fraud", "payment diversion", "vendor fraud"],
+    "ip_exposure": ["customer data exposed", "customer data leak", "exposed customer", "privacy breach", "data breach*", "personal data exposed",
+                     "data privacy", "privacy risk*", "customer data"],
+    "spear_phishing": ["phishing*", "spear-phishing", "spear phishing", "impersonat*", "ceo fraud", "executive impersonation", "business email compromise", "smishing"],
+    # AI used offensively against the firm: the taxonomy has no separate
+    # "AI as attacker" risk, and this is the one it fits -- an automated
+    # campaign against the firm's people and channels.
+    "social_engineering": ["social engineering", "wire transfer fraud", "fraudulent transfer", "invoice fraud", "payment diversion", "vendor fraud",
+                           "hacker*", "hacked", "malware", "ransomware", "cyberattack*", "cyber attack*", "cyber risk*", "cybersecurity", "cyber security"],
     # --- legal ---
     "high_risk_designation": ["high-risk", "high risk ai", "annex iii", "ai act", "eu ai act", "conformity assessment", "high-risk designation"],
     "insurance_underwriting_penalties": ["insurer fined", "insurance fine", "insurance regulator", "naic", "underwriting penalt*", "insurance ai"],
@@ -74,7 +87,8 @@ RISK_PHRASES: dict[str, list[str]] = {
     # --- vendor ---
     "provider_concentration": ["concentration risk", "concentration", "dependence on", "reliance on", "dominant provider", "handful of providers", "cloud giants", "hyperscaler"],
     "single_point_of_failure": ["single point of failure", "outage", "aws outage", "azure outage", "cloud outage", "region outage", "went offline"],
-    "supply_chain_breach": ["supply chain attack", "supply-chain attack", "third-party breach", "third party breach", "vendor breach", "vendor hack", "supplier hack", "lateral movement"],
+    "supply_chain_breach": ["supply chain attack", "supply-chain attack", "third-party breach", "third party breach", "vendor breach", "vendor hack",
+                             "supplier hack", "lateral movement", "vendor risk", "third party risk", "third-party risk", "ict risk*", "supplier risk"],
     "open_source_vulnerabilities": ["open source", "open-source", "vulnerabilit*", "backdoor", "malicious package", "cve-", "zero-day", "zero day"],
     # --- ethical ---
     "lending_bias": ["bias", "biased", "discriminat*", "disparate impact", "fair lending", "unfair", "unlawful discrimination"],

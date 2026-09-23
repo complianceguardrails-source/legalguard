@@ -60,7 +60,9 @@ CATEGORY_LABELS: dict[str, str] = {
 
 CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "trading_markets": [
-        "trading", "trader", "backtest", "algorithmic", "order execution", "market making", "hft",
+        # "algorithmic" on its own is not a trading word: in regulation
+        # text it is "algorithmic discrimination" and "algorithmic pricing".
+        "trading", "trader", "backtest", "algorithmic trading", "algo trading", "order execution", "market making", "hft",
         "quant ", "quantitative", "trading signal", "exchange", "market data", "交易",
         "order book", "market simulation", "financial time series",
     ],
@@ -222,6 +224,20 @@ def _neutralised(text: str, category: str) -> str:
     for phrase in CATEGORY_NEUTRAL_PHRASES.get(category, []):
         text = text.replace(phrase, " ")
     return text
+
+
+def categorise_with_evidence(name: str, description: str | None, evidence: str | None) -> dict[str, list[str]]:
+    """Category slug -> the phrases that put it there, so a reader can see
+    why a regulation was placed against a category and disagree with it."""
+    text = _normalize(f"{_describing_name(name)} {description or ''} {evidence or ''}")
+    out: dict[str, list[str]] = {}
+    for cat, kws in CATEGORY_KEYWORDS.items():
+        hits = [k for k in kws if _keyword_matches(k, _neutralised(text, cat))]
+        if hits:
+            out[cat] = hits
+    for cat in DECLARED_CATEGORIES.get(name, []):
+        out.setdefault(cat, ["declared"])
+    return out
 
 
 def assign_categories(name: str, description: str | None, evidence: str | None) -> list[str]:

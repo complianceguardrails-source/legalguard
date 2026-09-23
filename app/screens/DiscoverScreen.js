@@ -12,6 +12,7 @@ import { colors, type, radius } from "../theme";
 import { fetchUseCases } from "../lib/api";
 import { CATEGORIES } from "../lib/categories";
 import { getDiscoverState, setSelectedCategories } from "../lib/discoverState";
+import { useArrived } from "../lib/whatsNewContext";
 
 // A tag cloud, not a list: a category's type size says how many real
 // systems it holds, so the shape of the corpus is visible before you pick
@@ -71,6 +72,10 @@ export default function DiscoverScreen({ navigation }) {
   const [useCases, setUseCases] = useState(null);
   const [selected, setSelected] = useState(() => new Set());
   const [starredCount, setStarredCount] = useState(0);
+  // Whatever arrived since this device last opened Discover, announced
+  // once and then cleared.
+  const [arrived, onFocusUseCases] = useArrived("useCases");
+  useFocusEffect(onFocusUseCases);
 
   useEffect(() => {
     fetchUseCases().then(setUseCases);
@@ -113,6 +118,13 @@ export default function DiscoverScreen({ navigation }) {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
+        {arrived > 0 && (
+          <View style={styles.newStrip}>
+            <Text style={styles.newStripText}>
+              {arrived} new use case{arrived === 1 ? "" : "s"} since your last visit
+            </Text>
+          </View>
+        )}
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.h1}>What are you building?</Text>
@@ -172,6 +184,8 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   content: { padding: 20, paddingBottom: 110, gap: 18 },
   headerRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  newStrip: { backgroundColor: colors.accent, borderRadius: radius.chip, paddingHorizontal: 12, paddingVertical: 8, alignSelf: "flex-start" },
+  newStripText: { fontFamily: type.fontFamilyMedium, fontSize: 13, color: colors.primary },
   h1: { fontFamily: type.fontFamilyBold, fontSize: 24, color: colors.textMain, lineHeight: 30 },
   lede: { fontFamily: type.fontFamily, fontSize: 14.5, color: colors.textMuted, lineHeight: 21, marginTop: 6 },
   starredBtn: {

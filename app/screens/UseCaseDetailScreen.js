@@ -6,10 +6,10 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions, ActivityIndicator, Linking } from "react-native";
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, ShieldCheck, Star, ExternalLink, X, Code2, Box } from "lucide-react-native";
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, ShieldCheck, Star, ExternalLink, X, Code2, Box, BookMarked } from "lucide-react-native";
 
 import { colors, type, radius } from "../theme";
-import { fetchRegulations, fetchGuardrailRepos } from "../lib/api";
+import { fetchRegulations, fetchGuardrailRepos, fetchFinosFramework } from "../lib/api";
 import { categoryLabel, categoryTone, useCaseTone, orderedCategories, sectorLabel, TIER_LABEL } from "../lib/categories";
 import { getDiscoverState, toggleStar, dismiss } from "../lib/discoverState";
 import UseCaseArt from "../components/UseCaseArt";
@@ -33,10 +33,12 @@ export default function UseCaseDetailScreen({ route, navigation }) {
   const [regulations, setRegulations] = useState(null);
   const [starred, setStarred] = useState(false);
   const [repos, setRepos] = useState(null);
+  const [finos, setFinos] = useState([]);
 
   useEffect(() => {
     fetchRegulations({ limit: 500 }).then(setRegulations);
     fetchGuardrailRepos().then(setRepos);
+    fetchFinosFramework().then(setFinos);
     getDiscoverState().then((s) => setStarred(s.starred.includes(useCase.id)));
   }, [useCase.id]);
 
@@ -47,12 +49,20 @@ export default function UseCaseDetailScreen({ route, navigation }) {
   const guardrails = useMemo(() => {
     const factors = useCase.risk_factors || [];
     if (!repos || !factors.length) return [];
-    return factors.map((slug) => ({
-      slug,
-      label: RISK_BY_SLUG[slug]?.label || slug,
-      repos: repos.filter((r) => (r.risk_slugs || []).includes(slug)).sort((a, b) => (b.stars || 0) - (a.stars || 0)),
-    }));
-  }, [repos, useCase.risk_factors]);
+    return factors.map((slug) => {
+      // Two kinds of guardrail for the same risk: open-source tools, and
+      // the organisational controls the FINOS framework names. Both are
+      // labelled with where they come from.
+      const finosRisks = finos.filter((e) => e.kind === "risk" && (e.risk_slugs || []).includes(slug));
+      const ids = new Set(finosRisks.map((r) => r.external_id));
+      return {
+        slug,
+        label: RISK_BY_SLUG[slug]?.label || slug,
+        repos: repos.filter((r) => (r.risk_slugs || []).includes(slug)).sort((a, b) => (b.stars || 0) - (a.stars || 0)),
+        controls: finos.filter((e) => e.kind === "mitigation" && (e.mitigates || []).some((m) => ids.has(m))),
+      };
+    });
+  }, [repos, finos, useCase.risk_factors]);
   const [guardrailOpen, setGuardrailOpen] = useState(() => new Set());
 
   const matched = useMemo(
@@ -290,8 +300,9 @@ export default function UseCaseDetailScreen({ route, navigation }) {
           <Text style={styles.h2}>Existing guardrails</Text>
         </View>
         <Text style={styles.sectionNote}>
-          Open-source controls for each of this system's risks -- real repositories on GitHub and models on the Hugging Face
-          Hub, with their own stars and last activity. A risk with none listed has no known technical control.
+          What exists for each of this system's risks: open-source tools (real repositories on GitHub and models on the
+          Hugging Face Hub, with their own stars and last activity) and the organisational controls the FINOS AI
+          Governance Framework names. Every entry says where it came from.
         </Text>
         {!repos ? (
           <ActivityIndicator color={colors.primary} />
@@ -306,23 +317,27 @@ export default function UseCaseDetailScreen({ route, navigation }) {
                 <TouchableOpacity
                   onPress={() => setGuardrailOpen((prev) => { const n = new Set(prev); n.has(g.slug) ? n.delete(g.slug) : n.add(g.slug); return n; })}
                   style={styles.groupHead}
-                  disabled={!g.repos.length}
+                  disabled={!g.repos.length && !g.controls.length}
                   accessibilityRole="button"
                   accessibilityState={{ expanded: isOpen }}
                 >
-                  <Chevron size={16} color={g.repos.length ? colors.textMuted : "transparent"} />
+                  <Chevron size={16} color={g.repos.length || g.controls.length ? colors.textMuted : "transparent"} />
                   <View style={{ flex: 1, gap: 3 }}>
                     <View style={styles.groupMeta}>
                       <Text style={styles.groupTitle} numberOfLines={1}>{g.label}</Text>
-                      <Text style={styles.groupCount}>{g.repos.length}</Text>
+                      <Text style={styles.groupCount}>{g.repos.length + g.controls.length}</Text>
                     </View>
-                    <Text style={[styles.groupKind, { color: g.repos.length ? colors.primary : colors.textMuted }]}>
-                      {g.repos.length ? `${g.repos.length} guardrail${g.repos.length === 1 ? "" : "s"}` : "No known technical control"}
+                    <Text style={[styles.groupKind, { color: g.repos.length || g.controls.length ? colors.primary : colors.textMuted }]}>
+                      {[
+                        g.repos.length ? `${g.repos.length} open-source tool${g.repos.length === 1 ? "" : "s"}` : null,
+                        g.controls.length ? `${g.controls.length} FINOS control${g.controls.length === 1 ? "" : "s"}` : null,
+                      ].filter(Boolean).join(" · ") || "No known control"}
                     </Text>
                   </View>
                 </TouchableOpacity>
                 {isOpen && (
                   <View style={styles.groupBody}>
+                    {g.controls.map((c) => <ControlRow key={c.entry_id} control={c} />)}
                     {g.repos.map((r) => <RepoRow key={r.repo_id} repo={r} />)}
                   </View>
                 )}
@@ -355,9 +370,30 @@ export default function UseCaseDetailScreen({ route, navigation }) {
   );
 }
 
+// A control from the FINOS AI Governance Framework, carrying its
+// provenance the same way a repository carries GitHub or the Hub.
+function ControlRow({ control }) {
+  return (
+    <TouchableOpacity onPress={() => Linking.openURL(control.url)} style={styles.repo} accessibilityRole="link">
+      <View style={styles.repoHead}>
+        <BookMarked size={14} color={colors.textMain} />
+        <Text style={styles.repoName} numberOfLines={2}>{control.title}</Text>
+        <ExternalLink size={12} color={colors.textMuted} />
+      </View>
+      {!!control.summary && <Text style={styles.repoDesc} numberOfLines={2}>{control.summary}</Text>}
+      <Text style={styles.repoMeta}>
+        FINOS {control.external_id.toUpperCase()}
+        {control.type_label ? ` · ${control.type_label}` : ""}
+        {control.doc_status ? ` · ${control.doc_status.replace(/-/g, " ")}` : ""}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 function RepoRow({ repo }) {
   const Icon = repo.platform === "github" ? Code2 : Box;
   const meta = [
+    repo.platform === "github" ? "GitHub" : "Hugging Face",
     repo.stars != null ? `${repo.stars.toLocaleString()} ${repo.platform === "github" ? "stars" : "likes"}` : null,
     repo.downloads != null ? `${repo.downloads.toLocaleString()} downloads` : null,
     repo.language,

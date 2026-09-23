@@ -59,7 +59,8 @@ GRANT SELECT ON
     origin_driver_trend_summary,
     guardrail_compliance_summary,
     risk_news_stories,
-    guardrail_repos
+    guardrail_repos,
+    finos_framework_entries
 TO web_anon;
 ```
 

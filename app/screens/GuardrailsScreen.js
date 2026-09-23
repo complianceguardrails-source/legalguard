@@ -9,33 +9,30 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, RefreshControl, ActivityIndicator, useWindowDimensions } from "react-native";
 import Svg, { Path, G, Circle, Text as SvgText } from "react-native-svg";
-import { Code2, Box, ExternalLink, Sparkles, Trophy } from "lucide-react-native";
+import { Code2, Box, ExternalLink, Sparkles, Trophy, BookMarked } from "lucide-react-native";
 
 import { colors, type, radius } from "../theme";
-import { fetchGuardrailRepos } from "../lib/api";
+import { fetchGuardrailRepos, fetchFinosFramework } from "../lib/api";
 import { RISK_FAMILIES, RISKS, RISK_BY_SLUG } from "../lib/riskTaxonomy";
+import { FAMILY_TONE, FAMILY_SHORT } from "../lib/riskColors";
 
-// One tone per family, dark enough for white text; the shading of a risk
-// segment is this tone at an opacity that grows with coverage.
-const FAMILY_TONE = {
-  systemic: "#3B3F9E",
-  model: "#0E6B6B",
-  cyber: "#A34A17",
-  legal: "#234FA3",
-  vendor: "#3E5C76",
-  ethical: "#6B2D5C",
-  environmental: "#2E6B3A",
-};
-const FAMILY_SHORT = {
-  systemic: "Systemic",
-  model: "Model",
-  cyber: "Cyber",
-  legal: "Legal",
-  vendor: "Vendor",
-  ethical: "Ethical",
-  environmental: "Environment",
-};
 const DAY = 24 * 60 * 60 * 1000;
+
+// The frameworks FINOS cross-references, named the way a reviewer would.
+const FRAMEWORK_LABEL = {
+  "eu-ai-act": "EU AI Act",
+  "iso-42001": "ISO 42001",
+  "nist-sp-800-53r5": "NIST 800-53",
+  "nist-ai-600-1": "NIST AI 600-1",
+  "ffiec-itbooklets": "FFIEC",
+  "owasp-llm": "OWASP LLM",
+  "owasp-asi": "OWASP ASI",
+  "owasp-ml": "OWASP ML",
+  "canada-regulations": "Canada",
+  "uk-regulations": "UK",
+  "iosco-supervisory-toolkit": "IOSCO",
+  "atr": "ATR",
+};
 
 function coverageOpacity(n) {
   if (n === 0) return 0;
@@ -61,10 +58,15 @@ function sector(cx, cy, r0, r1, a0, a1) {
 export default function GuardrailsScreen() {
   const { width } = useWindowDimensions();
   const [repos, setRepos] = useState(null);
+  const [finos, setFinos] = useState([]);
   const [selected, setSelected] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = async () => setRepos(await fetchGuardrailRepos());
+  const load = async () => {
+    const [r, f] = await Promise.all([fetchGuardrailRepos(), fetchFinosFramework()]);
+    setRepos(r);
+    setFinos(f);
+  };
   useEffect(() => { load(); }, []);
 
   // Per-risk repos, per-family coverage, and the two lists.
@@ -111,6 +113,17 @@ export default function GuardrailsScreen() {
   const sel = selected ? RISK_BY_SLUG[selected] : null;
   const selRepos = selected ? model.byRisk[selected] : [];
 
+  // The organisational side of the same risk: the FINOS framework entries
+  // that cover it, and the controls those entries say address it. A
+  // repository is a tool; a mitigation is the control the tool serves.
+  const selFinos = useMemo(() => {
+    if (!selected) return { risks: [], mitigations: [] };
+    const risks = finos.filter((e) => e.kind === "risk" && (e.risk_slugs || []).includes(selected));
+    const ids = new Set(risks.map((r) => r.external_id));
+    const mitigations = finos.filter((e) => e.kind === "mitigation" && (e.mitigates || []).some((m) => ids.has(m)));
+    return { risks, mitigations };
+  }, [finos, selected]);
+
   return (
     <ScrollView
       style={styles.screen}
@@ -119,8 +132,8 @@ export default function GuardrailsScreen() {
     >
       <Text style={styles.h1}>Guardrail coverage</Text>
       <Text style={styles.lede}>
-        Every risk in the taxonomy, shaded by how many open-source guardrails control it. Hollow means no known
-        technical control. Tap a segment.
+        Every risk in the taxonomy, shaded by how many open-source guardrails control it. Hollow means no tool exists --
+        the FINOS framework may still name an organisational control. Tap a segment.
       </Text>
 
       {!repos ? (
@@ -194,8 +207,55 @@ export default function GuardrailsScreen() {
                 </View>
                 <Text style={styles.selFamily}>{RISK_FAMILIES.find((f) => f.key === sel.family)?.label}</Text>
                 <Text style={styles.selDesc}>{sel.description}</Text>
+                {selFinos.risks.length > 0 && (
+                  <View style={styles.finosBlock}>
+                    {selFinos.risks.map((r) => (
+                      <TouchableOpacity key={r.external_id} onPress={() => Linking.openURL(r.url)} accessibilityRole="link">
+                        <View style={styles.finosHead}>
+                          <BookMarked size={13} color={colors.secondary} />
+                          <Text style={styles.finosTitle}>
+                            FINOS {r.external_id.toUpperCase()} · {r.title}
+                          </Text>
+                        </View>
+                        {!!r.crosswalk_note && <Text style={styles.finosNote}>{r.crosswalk_note}</Text>}
+                        <View style={styles.refRow}>
+                          {Object.entries(r.framework_references || {}).map(([framework, items]) => (
+                            <View key={framework} style={styles.refChip}>
+                              <Text style={styles.refChipText}>
+                                {FRAMEWORK_LABEL[framework] || framework} {items.length}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                    {selFinos.mitigations.length > 0 && (
+                      <>
+                        <Text style={styles.finosSub}>Controls the framework says address it</Text>
+                        {selFinos.mitigations.map((m) => (
+                          <TouchableOpacity key={m.external_id} style={styles.mitigation} onPress={() => Linking.openURL(m.url)} accessibilityRole="link">
+                            <View style={styles.repoHead}>
+                              <BookMarked size={14} color={colors.textMain} />
+                              <Text style={styles.mitigationTitle} numberOfLines={2}>{m.title}</Text>
+                              <ExternalLink size={12} color={colors.textMuted} />
+                            </View>
+                            <Text style={styles.mitigationMeta}>
+                              FINOS {m.external_id.toUpperCase()}
+                              {m.type_label ? ` · ${m.type_label}` : ""}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </>
+                    )}
+                  </View>
+                )}
+                {selRepos.length > 0 && <Text style={styles.finosSub}>Open-source tools</Text>}
                 {selRepos.length === 0 ? (
-                  <Text style={styles.gap}>No known technical control. This is a gap in the ecosystem, not something the app hides.</Text>
+                  <Text style={styles.gap}>
+                    {selFinos.mitigations.length > 0
+                      ? "No open-source tool implements this one; the controls above are organisational."
+                      : "No known technical control. This is a gap in the ecosystem, not something the app hides."}
+                  </Text>
                 ) : (
                   selRepos.map((r) => <RepoRow key={r.repo_id} repo={r} />)
                 )}
@@ -251,6 +311,7 @@ export default function GuardrailsScreen() {
 function RepoRow({ repo, showRisks }) {
   const Icon = repo.platform === "github" ? Code2 : Box;
   const meta = [
+    repo.platform === "github" ? "GitHub" : "Hugging Face",
     repo.stars != null ? `${repo.stars.toLocaleString()} ${repo.platform === "github" ? "stars" : "likes"}` : null,
     repo.downloads != null ? `${repo.downloads.toLocaleString()} downloads` : null,
     repo.license,
@@ -300,6 +361,17 @@ const styles = StyleSheet.create({
   count: { minWidth: 26, textAlign: "center", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: colors.background, fontFamily: type.fontFamilyMedium, fontSize: 12.5, color: colors.textMuted },
   selFamily: { fontFamily: type.fontFamilyMedium, fontSize: 12, color: colors.textMuted, letterSpacing: 0.5, textTransform: "uppercase" },
   selDesc: { fontFamily: type.fontFamily, fontSize: 14, color: colors.textMain, lineHeight: 20, marginBottom: 4 },
+  finosBlock: { gap: 6, marginTop: 4, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
+  finosHead: { flexDirection: "row", alignItems: "center", gap: 6 },
+  finosTitle: { flex: 1, fontFamily: type.fontFamilyBold, fontSize: 13, color: colors.textMain },
+  finosNote: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMuted, lineHeight: 18 },
+  finosSub: { fontFamily: type.fontFamilyMedium, fontSize: 11.5, color: colors.secondary, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 10 },
+  refRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 4 },
+  refChip: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
+  refChipText: { fontFamily: type.fontFamilyMedium, fontSize: 10.5, color: colors.textMuted },
+  mitigation: { paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: colors.border },
+  mitigationTitle: { fontFamily: type.fontFamilyMedium, fontSize: 13, color: colors.textMain },
+  mitigationMeta: { fontFamily: type.fontFamily, fontSize: 11, color: colors.textMuted, marginTop: 2 },
   gap: { fontFamily: type.fontFamily, fontSize: 14, color: colors.textMuted, lineHeight: 20, fontStyle: "italic" },
   h2Row: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
   h2: { fontFamily: type.fontFamilyBold, fontSize: 16, color: colors.textMain, marginTop: 8 },

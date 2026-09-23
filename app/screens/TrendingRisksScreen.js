@@ -6,23 +6,31 @@
 // risk chips so a reader can judge it.
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, RefreshControl, ActivityIndicator, useWindowDimensions } from "react-native";
-import Svg, { Polyline, Line, Circle, Text as SvgText } from "react-native-svg";
+import Svg, { Rect, Line, Text as SvgText } from "react-native-svg";
 import { ExternalLink, Landmark, Newspaper } from "lucide-react-native";
 
 import { colors, type, radius } from "../theme";
 import { fetchRiskNews } from "../lib/api";
 import { RISK_FAMILIES, RISK_BY_SLUG } from "../lib/riskTaxonomy";
+import { FAMILY_TONE } from "../lib/riskColors";
+import { useArrived } from "../lib/whatsNewContext";
 
 const FAMILY_LABEL = Object.fromEntries(RISK_FAMILIES.map((f) => [f.key, f.label]));
-// Same family tones as the Guardrails wheel, so a colour means one thing
-// across the app.
-const FAMILY_TONE = { systemic: "#3B3F9E", model: "#0E6B6B", cyber: "#A34A17", legal: "#234FA3", vendor: "#3E5C76", ethical: "#6B2D5C", environmental: "#2E6B3A" };
 const DAY = 24 * 60 * 60 * 1000;
 const CHART_WEEKS = 13; // three months
 
+// Some feeds publish a date in the future (a scheduling slip at the
+// outlet). Clamped to now, so such a story sits at the top of the list
+// and inside the chart's last week rather than falling off both.
+function storyTime(story, now = Date.now()) {
+  const t = new Date(story.published_at || story.fetched_at).getTime();
+  return Number.isNaN(t) ? now : Math.min(t, now);
+}
+
 function bucket(story, now) {
-  const t = story.published_at ? new Date(story.published_at).getTime() : new Date(story.fetched_at).getTime();
+  const t = storyTime(story, now);
   const age = now - t;
   if (age < DAY) return "Today";
   if (age < 2 * DAY) return "Yesterday";
@@ -38,47 +46,84 @@ function when(story) {
   return d.toLocaleDateString(undefined, thisYear ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" });
 }
 
-// Stories per week per family over the last CHART_WEEKS weeks, as lines.
-// Weekly bins: a daily line over three months is noise; a weekly one is a
-// trend.
-function TrendLines({ stories, family, width }) {
-  const w = width, h = 160, padL = 28, padR = 10, padT = 10, padB = 24;
+// Stories per week, stacked by family, over the last CHART_WEEKS weeks.
+//
+// Bars rather than lines: the counts are small and most weeks are empty,
+// and a line drawn between two zero weeks claims a continuity the data
+// does not have. A week with no stories is simply no bar. One story can
+// report on several risk families, so it is counted in each -- the caption
+// says so rather than quietly picking one.
+function WeeklyBars({ stories, family, width }) {
+  const w = width, h = 170, padL = 26, padR = 8, padT = 12, padB = 26;
   const WEEK = 7 * DAY;
   const end = new Date(); end.setHours(0, 0, 0, 0);
   const start = end.getTime() - (CHART_WEEKS - 1) * WEEK;
-  const weekIndex = (t) => Math.floor((t - start) / WEEK);
-  const series = RISK_FAMILIES.filter((f) => !family || f.key === family).map((f) => {
-    const counts = new Array(CHART_WEEKS).fill(0);
-    for (const s of stories) {
-      if (!(s.families || []).includes(f.key)) continue;
-      const i = weekIndex(new Date(s.published_at || s.fetched_at).getTime());
-      if (i >= 0 && i < CHART_WEEKS) counts[i] += 1;
+  const fams = RISK_FAMILIES.filter((f) => !family || f.key === family);
+
+  // week -> family -> count
+  const weeks = Array.from({ length: CHART_WEEKS }, () => ({}));
+  for (const st of stories) {
+    const i = Math.floor((storyTime(st) - start) / WEEK);
+    if (i < 0 || i >= CHART_WEEKS) continue;
+    for (const f of st.families || []) {
+      if (family && f !== family) continue;
+      weeks[i][f] = (weeks[i][f] || 0) + 1;
     }
-    return { key: f.key, counts };
-  });
-  const max = Math.max(1, ...series.flatMap((s) => s.counts));
-  const x = (i) => padL + (i * (w - padL - padR)) / (CHART_WEEKS - 1);
-  const y = (n) => padT + (h - padT - padB) * (1 - n / max);
-  const ticks = [0, Math.floor(CHART_WEEKS / 3), Math.floor((2 * CHART_WEEKS) / 3), CHART_WEEKS - 1];
+  }
+  const totals = weeks.map((wk) => Object.values(wk).reduce((a, b) => a + b, 0));
+  const max = Math.max(1, ...totals);
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+  const slot = plotW / CHART_WEEKS;
+  const barW = Math.min(slot * 0.62, 22);
+  const xOf = (i) => padL + slot * i + (slot - barW) / 2;
+  const yOf = (v) => padT + plotH * (1 - v / max);
+  const gridValues = [...new Set([0, Math.ceil(max / 2), max])];
+  const ticks = [0, Math.floor((CHART_WEEKS - 1) / 2), CHART_WEEKS - 1];
   const label = (i) => new Date(start + i * WEEK).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+
   return (
     <Svg width={w} height={h}>
-      {[0, Math.ceil(max / 2), max].filter((v, i, a) => a.indexOf(v) === i).map((n) => (
+      {gridValues.map((n) => (
         <React.Fragment key={n}>
-          <Line x1={padL} x2={w - padR} y1={y(n)} y2={y(n)} stroke={colors.border} strokeWidth={1} />
-          <SvgText x={padL - 6} y={y(n) + 3.5} fill={colors.textMuted} fontSize={10.5} fontFamily={type.fontFamily} textAnchor="end">{n}</SvgText>
+          <Line x1={padL} x2={w - padR} y1={yOf(n)} y2={yOf(n)} stroke={colors.border} strokeWidth={1} />
+          <SvgText x={padL - 6} y={yOf(n) + 3.5} fill={colors.textMuted} fontSize={10.5} fontFamily={type.fontFamily} textAnchor="end">{n}</SvgText>
         </React.Fragment>
       ))}
+      {weeks.map((wk, i) => {
+        // Stack in taxonomy order so a family keeps the same position
+        // from week to week.
+        let cursor = 0;
+        return fams.map((f) => {
+          const n = wk[f.key] || 0;
+          if (!n) return null;
+          const yTop = yOf(cursor + n);
+          const height = plotH * (n / max);
+          cursor += n;
+          return (
+            <Rect
+              key={`${i}-${f.key}`}
+              x={xOf(i)}
+              y={yTop}
+              width={barW}
+              height={Math.max(height, 2)}
+              rx={2.5}
+              fill={FAMILY_TONE[f.key]}
+            />
+          );
+        });
+      })}
       {ticks.map((i) => (
-        <SvgText key={i} x={x(i)} y={h - 6} fill={colors.textMuted} fontSize={10.5} fontFamily={type.fontFamily} textAnchor={i === 0 ? "start" : i === CHART_WEEKS - 1 ? "end" : "middle"}>
+        <SvgText
+          key={i}
+          x={xOf(i) + barW / 2}
+          y={h - 8}
+          fill={colors.textMuted}
+          fontSize={10.5}
+          fontFamily={type.fontFamily}
+          textAnchor={i === 0 ? "start" : i === CHART_WEEKS - 1 ? "end" : "middle"}
+        >
           {label(i)}
         </SvgText>
-      ))}
-      {series.map((s) => (
-        <React.Fragment key={s.key}>
-          <Polyline points={s.counts.map((n, i) => `${x(i)},${y(n)}`).join(" ")} fill="none" stroke={FAMILY_TONE[s.key]} strokeWidth={2} strokeLinejoin="round" />
-          {s.counts.map((n, i) => (n ? <Circle key={i} cx={x(i)} cy={y(n)} r={3} fill={FAMILY_TONE[s.key]} /> : null))}
-        </React.Fragment>
       ))}
     </Svg>
   );
@@ -89,6 +134,8 @@ export default function TrendingRisksScreen() {
   const [stories, setStories] = useState(null);
   const [family, setFamily] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [arrived, onFocusStories] = useArrived("stories");
+  useFocusEffect(onFocusStories);
 
   const load = async () => setStories(await fetchRiskNews());
   useEffect(() => { load(); }, []);
@@ -96,6 +143,19 @@ export default function TrendingRisksScreen() {
   const counts = useMemo(() => {
     const c = {};
     for (const s of stories || []) for (const f of s.families || []) c[f] = (c[f] || 0) + 1;
+    return c;
+  }, [stories]);
+
+  // The legend describes the chart, so it counts the same window the
+  // chart draws -- a family whose only stories are older than three
+  // months has no bar, and its legend entry says so by dimming.
+  const windowCounts = useMemo(() => {
+    const cutoff = Date.now() - CHART_WEEKS * 7 * DAY;
+    const c = {};
+    for (const s of stories || []) {
+      if (storyTime(s) < cutoff) continue;
+      for (const f of s.families || []) c[f] = (c[f] || 0) + 1;
+    }
     return c;
   }, [stories]);
 
@@ -119,18 +179,27 @@ export default function TrendingRisksScreen() {
           Stories from trusted financial outlets and regulators, each placed against the risk it reports on. Tap a story to
           read it at the source.
         </Text>
+        {arrived > 0 && (
+          <View style={styles.newStrip}>
+            <Text style={styles.newStripText}>{arrived} new stor{arrived === 1 ? "y" : "ies"} since your last visit</Text>
+          </View>
+        )}
 
         {!!stories && (
           <View style={styles.chartCard}>
             <Text style={styles.chartTitle}>Stories per week, last 3 months</Text>
-            <TrendLines stories={stories} family={family} width={Math.min(width - 40, 600) - 28} />
+            <Text style={styles.chartNote}>A story covering several risk families is counted in each.</Text>
+            <WeeklyBars stories={stories} family={family} width={Math.min(width - 40, 600) - 28} />
             <View style={styles.chartLegend}>
-              {RISK_FAMILIES.filter((f) => !family || f.key === family).map((f) => (
-                <View key={f.key} style={styles.legendItem}>
-                  <View style={[styles.legendSwatch, { backgroundColor: FAMILY_TONE[f.key] }]} />
-                  <Text style={styles.legendText}>{f.label}</Text>
-                </View>
-              ))}
+              {RISK_FAMILIES.filter((f) => !family || f.key === family).map((f) => {
+                const active = (windowCounts[f.key] || 0) > 0;
+                return (
+                  <View key={f.key} style={[styles.legendItem, !active && styles.legendItemOff]}>
+                    <View style={[styles.legendSwatch, { backgroundColor: FAMILY_TONE[f.key] }]} />
+                    <Text style={styles.legendText}>{f.label}</Text>
+                  </View>
+                );
+              })}
             </View>
           </View>
         )}
@@ -204,11 +273,15 @@ const styles = StyleSheet.create({
   content: { padding: 20, gap: 14 },
   h1: { fontFamily: type.fontFamilyBold, fontSize: 24, color: colors.textMain, lineHeight: 30 },
   lede: { fontFamily: type.fontFamily, fontSize: 14.5, color: colors.textMuted, lineHeight: 21 },
+  newStrip: { backgroundColor: colors.accent, borderRadius: radius.chip, paddingHorizontal: 12, paddingVertical: 8, alignSelf: "flex-start" },
+  newStripText: { fontFamily: type.fontFamilyMedium, fontSize: 13, color: colors.primary },
   chartCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 14, gap: 8 },
   chartTitle: { fontFamily: type.fontFamilyBold, fontSize: 14.5, color: colors.textMain },
+  chartNote: { fontFamily: type.fontFamily, fontSize: 11.5, color: colors.textMuted, marginTop: -4 },
   chartLegend: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  legendSwatch: { width: 10, height: 10, borderRadius: 2 },
+  legendItemOff: { opacity: 0.32 },
+  legendSwatch: { width: 11, height: 11, borderRadius: 3 },
   legendText: { fontFamily: type.fontFamily, fontSize: 12, color: colors.textMuted },
   chips: { flexDirection: "row", gap: 8, paddingVertical: 2 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.chip, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },

@@ -17,7 +17,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import feedparser
@@ -53,8 +53,9 @@ _SITES = " OR ".join(f"site:{d}" for d in sorted(set(ALLOWED_OUTLETS.values())))
 
 
 def _family_query(terms: str) -> str:
-    # Last 30 days from the allowlisted outlets only; AI in the story.
-    return _gnews(f'({terms}) (AI OR "artificial intelligence" OR algorithm OR chatbot OR "machine learning") ({_SITES}) when:30d')
+    # Recent only, from the allowlisted outlets, with AI in the story.
+    # Without a when: filter Google News happily returns 2016 articles.
+    return _gnews(f'({terms}) (AI OR "artificial intelligence" OR algorithm OR chatbot OR "machine learning") ({_SITES}) when:60d')
 
 
 FAMILY_QUERY_FEEDS: list[Feed] = [
@@ -75,12 +76,12 @@ FEEDS: list[Feed] = [
     Feed("Financial Times", "news", "https://www.ft.com/markets?format=rss"),
     Feed("Wall Street Journal", "news", "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain"),
     Feed("Wall Street Journal", "news", "https://feeds.content.dowjones.io/public/rss/RSSWSJD"),
-    Feed("Reuters", "news", _gnews('site:reuters.com ("artificial intelligence" OR AI) (bank OR finance OR trading OR insurer OR regulator)')),
-    Feed("Bloomberg", "news", _gnews('site:bloomberg.com ("artificial intelligence" OR AI) (bank OR finance OR trading OR insurer OR regulator)')),
+    Feed("Reuters", "news", _gnews('site:reuters.com ("artificial intelligence" OR AI) (bank OR finance OR trading OR insurer OR regulator) when:90d')),
+    Feed("Bloomberg", "news", _gnews('site:bloomberg.com ("artificial intelligence" OR AI) (bank OR finance OR trading OR insurer OR regulator) when:90d')),
     Feed("CNBC", "news", "https://www.cnbc.com/id/10000664/device/rss/rss.html"),  # Finance
     Feed("CNBC", "news", "https://www.cnbc.com/id/19854910/device/rss/rss.html"),  # Technology
     Feed("The Economist", "news", "https://www.economist.com/finance-and-economics/rss.xml"),
-    Feed("American Banker", "news", _gnews('site:americanbanker.com AI')),
+    Feed("American Banker", "news", _gnews('site:americanbanker.com AI when:90d')),
     Feed("Finextra", "news", "https://www.finextra.com/rss/headlines.aspx"),
     # --- regulators ---
     Feed("SEC", "regulator", "https://www.sec.gov/news/pressreleases.rss"),
@@ -91,6 +92,40 @@ FEEDS: list[Feed] = [
     Feed("Bank of England", "regulator", "https://www.bankofengland.co.uk/rss/news"),
     Feed("CFPB", "regulator", "https://www.consumerfinance.gov/about-us/newsroom/feed/"),
 ]
+
+
+# An item is news only if it reports something that has happened. These
+# three guards drop the rest, in order of how certain each one is.
+MAX_AGE_DAYS = 400  # a year plus slack, so the corpus stays current
+FUTURE_TOLERANCE_HOURS = 36  # timezone and scheduling slack, nothing more
+
+# Pages that are an invitation, not a report. Finextra and the trade press
+# publish these through the same feed as their news.
+_EVENT_URL_MARKERS = ("/event-info/", "/events/", "/event/", "/webinar", "/webinars/", "/conference",
+                      "/whitepaper", "/white-paper", "/research-paper", "/podcast", "/register")
+_EVENT_PHRASES = ("webinar", "join us", "register now", "registration", "sign up now", "book your place",
+                  "save the date", "keynote", "panel discussion", "roundtable", "fireside chat",
+                  "on-demand session", "our upcoming", "this event", "sponsored by", "in partnership with",
+                  "tickets", "agenda and speakers", "call for papers", "nominations are open", "awards")
+
+
+def is_event_announcement(title: str, summary: str, url: str) -> bool:
+    if any(m in url.lower() for m in _EVENT_URL_MARKERS):
+        return True
+    text = f"{title} {summary or ''}".lower()
+    return any(p in text for p in _EVENT_PHRASES)
+
+
+def is_current(published: Optional[datetime], now: Optional[datetime] = None) -> bool:
+    """A story with no date is kept (the feed simply did not say); one
+    dated in the future is an announcement of something yet to happen, and
+    one older than MAX_AGE_DAYS is not news any more."""
+    if published is None:
+        return True
+    now = now or datetime.now(timezone.utc)
+    if published > now + timedelta(hours=FUTURE_TOLERANCE_HOURS):
+        return False
+    return (now - published).days <= MAX_AGE_DAYS
 
 
 def _published(entry) -> Optional[datetime]:
@@ -140,6 +175,7 @@ def fetch_feed(feed: Feed) -> list[dict]:
 def mine_risk_news() -> list[dict]:
     """Every story from every feed that is about AI and matches a risk."""
     out: list[dict] = []
+    skipped_event = skipped_stale = 0
     seen: set[str] = set()  # URLs and normalised titles: the same story reaches us by both
     for feed in FEEDS + FAMILY_QUERY_FEEDS:
         entries = fetch_feed(feed)
@@ -147,6 +183,12 @@ def mine_risk_news() -> list[dict]:
         for e in entries:
             title_key = re.sub(r"[^a-z0-9]+", " ", e["title"].lower()).strip()
             if e["url"] in seen or title_key in seen:
+                continue
+            if is_event_announcement(e["title"], e["summary"], e["url"]):
+                skipped_event += 1
+                continue
+            if not is_current(e["published_at"]):
+                skipped_stale += 1
                 continue
             if not is_about_ai(e["title"], e["summary"]):
                 continue
@@ -166,4 +208,5 @@ def mine_risk_news() -> list[dict]:
             kept += 1
         logger.info("%-20s %3d entries, %2d kept", feed.outlet or "(query feed)", len(entries), kept)
         time.sleep(0.5)
+    logger.info("dropped %d event announcement(s), %d out-of-date item(s)", skipped_event, skipped_stale)
     return out

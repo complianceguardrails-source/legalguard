@@ -24,9 +24,10 @@ as title, summary and link). None of it is about you.
 
 ## What stays on your device
 
-Which cards you have starred or dismissed, and which categories you last
-selected, are stored only on the device and are removed when you delete
-the app. They are never sent anywhere.
+Which cards you have starred or dismissed, which categories you last
+selected, and the time you last opened each section (so the app can show
+you what has arrived since) are stored only on the device and are removed
+when you delete the app. They are never sent anywhere.
 
 ## Links to other sites
 
