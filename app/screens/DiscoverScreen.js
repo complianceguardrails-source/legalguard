@@ -162,6 +162,23 @@ export default function DiscoverScreen({ navigation }) {
             ))}
           </View>
         )}
+
+        {useCases && (
+          <TouchableOpacity
+            style={styles.adaptRow}
+            onPress={() => navigation.navigate("Deck", { slugs: [], mode: "translatable" })}
+            accessibilityRole="button"
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.adaptTitle}>Adaptable capabilities</Text>
+              <Text style={styles.adaptNote}>
+                Earth-observation systems one step from a financial use -- property valuation, catastrophe exposure,
+                sanctions screening -- with what it would take to get there.
+              </Text>
+            </View>
+            <ArrowRight size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       {useCases && (
@@ -203,6 +220,9 @@ const styles = StyleSheet.create({
   tagTextOn: { color: "#FFFFFF" },
   tagCount: { fontFamily: type.fontFamily, color: colors.textMuted, fontVariant: ["tabular-nums"] },
   tagCountOn: { color: "rgba(255,255,255,0.78)" },
+  adaptRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6, padding: 13, borderRadius: radius.card, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  adaptTitle: { fontFamily: type.fontFamilyBold, fontSize: 14, color: colors.textMain },
+  adaptNote: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMuted, lineHeight: 18, marginTop: 2 },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 16, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
   cta: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,

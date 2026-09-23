@@ -871,3 +871,29 @@ def upsert_finos_entry(conn: psycopg.Connection, row: dict) -> None:
              row.get("risk_slugs") or None, row.get("crosswalk_note"), row["url"]),
         )
     conn.commit()
+
+
+def upsert_translatable_use_case(conn: psycopg.Connection, *, name: str, parent_sector: str, modality: str,
+                                 description: str, github_reference_url: str | None, hf_model_id: str | None,
+                                 risk_tier: str | None, categories: list[str], translation: dict) -> bool:
+    """An earth-observation capability that was not built for finance, with
+    the financial decision it could feed. Marked 'translatable' so the app
+    never shows it as a system already doing that job."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO banking_use_cases
+                (name, parent_sector, modality, description, github_reference_url, hf_model_id,
+                 risk_tier, source, categories, applicability, translation)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'translatable', %s)
+            ON CONFLICT (name) DO UPDATE SET
+                description = EXCLUDED.description, categories = EXCLUDED.categories,
+                applicability = 'translatable', translation = EXCLUDED.translation, updated_at = now()
+            RETURNING (xmax = 0) AS inserted
+            """,
+            (name, parent_sector, modality, description, github_reference_url, hf_model_id, risk_tier,
+             "github_mined" if github_reference_url else "huggingface_mined", categories, json.dumps(translation)),
+        )
+        inserted = cur.fetchone()[0]
+    conn.commit()
+    return bool(inserted)

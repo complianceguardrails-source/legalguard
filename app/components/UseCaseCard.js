@@ -33,6 +33,11 @@ export default function UseCaseCard({ useCase, width, height, starred, onToggleS
       )}
 
       <View style={styles.body}>
+        {useCase.applicability === "translatable" && !!useCase.translation?.application_short && (
+          <View style={styles.adaptBadge}>
+            <Text style={styles.adaptBadgeText}>{useCase.translation.application_short}</Text>
+          </View>
+        )}
         <View style={styles.cats}>
           {cats.map((slug) => (
             <View key={slug} style={styles.tag}>
@@ -61,6 +66,8 @@ const styles = StyleSheet.create({
   star: { position: "absolute", top: 14, right: 14, padding: 8, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.22)" },
   body: { padding: 18, gap: 8 },
   cats: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  adaptBadge: { alignSelf: "flex-start", backgroundColor: "rgba(255,255,255,0.22)", borderWidth: 1, borderColor: "rgba(255,255,255,0.45)", paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 },
+  adaptBadgeText: { fontFamily: type.fontFamilyBold, fontSize: 10, letterSpacing: 0.5, color: "#FFFFFF", textTransform: "uppercase" },
   tag: { backgroundColor: "rgba(255,255,255,0.18)", paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 },
   tagText: { fontFamily: type.fontFamilyMedium, fontSize: 11.5, letterSpacing: 0.6, color: "#FFFFFF", textTransform: "uppercase" },
   title: { fontFamily: type.fontFamilyBold, fontSize: 20, lineHeight: 25, color: "#FFFFFF" },

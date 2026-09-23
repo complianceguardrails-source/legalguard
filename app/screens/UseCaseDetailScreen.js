@@ -152,6 +152,17 @@ export default function UseCaseDetailScreen({ route, navigation }) {
       </View>
 
       <View style={styles.section}>
+        {useCase.applicability === "translatable" && !!useCase.translation && (
+          <View style={styles.translation}>
+            <Text style={styles.translationTitle}>{useCase.translation.application_short || "Adaptable to finance"}</Text>
+            <Text style={styles.translationLabel}>What it does today</Text>
+            <Text style={styles.translationBody}>{useCase.translation.capability}</Text>
+            <Text style={styles.translationLabel}>The financial decision it could feed</Text>
+            <Text style={styles.translationBody}>{useCase.translation.application}</Text>
+            <Text style={styles.translationLabel}>What would have to be true first</Text>
+            <Text style={styles.translationBody}>{useCase.translation.prerequisite}</Text>
+          </View>
+        )}
         {blurb ? <Text style={styles.body}>{blurb}</Text> : <Text style={styles.muted}>No description is stored for this use case.</Text>}
         {!!SOURCE_LABEL[useCase.source] && <Text style={styles.provenance}>{SOURCE_LABEL[useCase.source]}</Text>}
         {link && (
@@ -427,6 +438,10 @@ const styles = StyleSheet.create({
   h2Row: { flexDirection: "row", alignItems: "center", gap: 8 },
   h2: { fontFamily: type.fontFamilyBold, fontSize: 16.5, color: colors.textMain },
   sectionNote: { fontFamily: type.fontFamily, fontSize: 13.5, color: colors.textMuted, lineHeight: 19 },
+  translation: { gap: 5, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 13 },
+  translationTitle: { fontFamily: type.fontFamilyBold, fontSize: 13.5, color: colors.textMain },
+  translationLabel: { fontFamily: type.fontFamilyMedium, fontSize: 11, color: colors.secondary, letterSpacing: 0.4, textTransform: "uppercase", marginTop: 4 },
+  translationBody: { fontFamily: type.fontFamily, fontSize: 13, color: colors.textMain, lineHeight: 19 },
   body: { fontFamily: type.fontFamily, fontSize: 15.5, color: colors.textMain, lineHeight: 23 },
   muted: { fontFamily: type.fontFamily, fontSize: 14.5, color: colors.textMuted, lineHeight: 21 },
   provenance: { fontFamily: type.fontFamilyMedium, fontSize: 12.5, color: colors.textMuted, letterSpacing: 0.4, textTransform: "uppercase" },
