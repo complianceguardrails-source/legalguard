@@ -44,5 +44,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.chip,
   },
   icon: { marginRight: 3 },
-  text: { fontFamily: type.fontFamilyMedium, fontSize: 10 },
+  text: { fontFamily: type.fontFamilyMedium, fontSize: 11.5 },
 });

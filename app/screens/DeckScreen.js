@@ -94,7 +94,7 @@ export default function DeckScreen({ route, navigation }) {
     if (!current) return;
     // Opening detail is a look, not a decision: the card stays where it is.
     settle();
-    navigation.navigate("UseCaseDetail", { useCase: current, fromDeck: true });
+    navigation.navigate("UseCaseDetail", { useCase: current, fromDeck: true, preferred: slugs });
   };
   const onNext = () => (deck.length > 1 ? fling(SWIPE.next, () => setIndex(nextAt)) : settle());
 
@@ -162,14 +162,14 @@ export default function DeckScreen({ route, navigation }) {
         <View style={styles.stage}>
           {next && (
             <View style={[styles.under, { width: cardW, height: cardH }]}>
-              <UseCaseCard useCase={next} width={cardW} height={cardH} />
+              <UseCaseCard useCase={next} width={cardW} height={cardH} preferred={slugs} />
             </View>
           )}
           <Animated.View
             {...responder.panHandlers}
             style={[styles.top, { width: cardW, height: cardH, transform: [{ translateX: pan.x }, { translateY: pan.y }, { rotate }] }]}
           >
-            <UseCaseCard useCase={current} width={cardW} height={cardH} starred={state.starred.includes(current.id)} onToggleStar={onStar} />
+            <UseCaseCard useCase={current} width={cardW} height={cardH} starred={state.starred.includes(current.id)} onToggleStar={onStar} preferred={slugs} />
             <Animated.View style={[styles.hint, styles.hintNext, { opacity: nextHint }]} pointerEvents="none">
               <ChevronRight size={16} color="#FFFFFF" /><Text style={styles.hintText}>{wraps ? "Back to first" : "Next"}</Text>
             </Animated.View>
@@ -190,20 +190,20 @@ export default function DeckScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   topBar: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 12 },
-  topTitle: { flex: 1, fontFamily: type.fontFamilyMedium, fontSize: 14, color: colors.textMain },
-  counter: { fontFamily: type.fontFamily, fontSize: 12, color: colors.textMuted, fontVariant: ["tabular-nums"] },
+  topTitle: { flex: 1, fontFamily: type.fontFamilyMedium, fontSize: 15.5, color: colors.textMain },
+  counter: { fontFamily: type.fontFamily, fontSize: 13.5, color: colors.textMuted, fontVariant: ["tabular-nums"] },
   stage: { flex: 1, alignItems: "center", justifyContent: "center" },
   under: { position: "absolute", transform: [{ scale: 0.95 }, { translateY: 14 }], opacity: 0.7 },
   top: { shadowColor: "#0B2545", shadowOpacity: 0.25, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 8 },
   hint: { position: "absolute", top: 18, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.45)" },
   hintNext: { left: 18 },
   hintDetail: { right: 18 },
-  hintText: { fontFamily: type.fontFamilyBold, fontSize: 12, color: "#FFFFFF", letterSpacing: 0.5, textTransform: "uppercase" },
+  hintText: { fontFamily: type.fontFamilyBold, fontSize: 13.5, color: "#FFFFFF", letterSpacing: 0.5, textTransform: "uppercase" },
   legend: { position: "absolute", bottom: 22 },
-  legendText: { fontFamily: type.fontFamily, fontSize: 12, color: colors.textMuted },
+  legendText: { fontFamily: type.fontFamily, fontSize: 13.5, color: colors.textMuted },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 10 },
   emptyTitle: { fontFamily: type.fontFamilyBold, fontSize: 18, color: colors.textMain, textAlign: "center" },
-  emptyText: { fontFamily: type.fontFamily, fontSize: 13, color: colors.textMuted, textAlign: "center", lineHeight: 19 },
+  emptyText: { fontFamily: type.fontFamily, fontSize: 14.5, color: colors.textMuted, textAlign: "center", lineHeight: 21 },
   secondaryBtn: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, paddingHorizontal: 16, paddingVertical: 11, borderRadius: radius.button, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  secondaryBtnText: { fontFamily: type.fontFamilyMedium, fontSize: 13, color: colors.primary },
+  secondaryBtnText: { fontFamily: type.fontFamilyMedium, fontSize: 14.5, color: colors.primary },
 });

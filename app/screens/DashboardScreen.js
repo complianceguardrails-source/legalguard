@@ -104,8 +104,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   metricValue: { fontFamily: type.fontFamilyBold, fontSize: 20, color: colors.textMain },
-  metricLabel: { fontFamily: type.fontFamilyBold, fontSize: 13, textAlign: "center" },
+  metricLabel: { fontFamily: type.fontFamilyBold, fontSize: 14.5, textAlign: "center" },
   sectionTitle: { fontFamily: type.fontFamilyBold, fontSize: 18, color: colors.textMain, marginBottom: 10 },
-  emptyText: { fontFamily: type.fontFamily, fontSize: 13, color: colors.textMuted },
-  reviewHint: { fontFamily: type.fontFamily, fontSize: 12, color: colors.textMuted, fontStyle: "italic", marginTop: 4 },
+  emptyText: { fontFamily: type.fontFamily, fontSize: 14.5, color: colors.textMuted },
+  reviewHint: { fontFamily: type.fontFamily, fontSize: 13.5, color: colors.textMuted, fontStyle: "italic", marginTop: 4 },
 });

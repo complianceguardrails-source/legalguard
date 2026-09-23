@@ -19,7 +19,7 @@ const FAMILY_LABEL = Object.fromEntries(RISK_FAMILIES.map((f) => [f.key, f.label
 // across the app.
 const FAMILY_TONE = { systemic: "#3B3F9E", model: "#0E6B6B", cyber: "#A34A17", legal: "#234FA3", vendor: "#3E5C76", ethical: "#6B2D5C", environmental: "#2E6B3A" };
 const DAY = 24 * 60 * 60 * 1000;
-const CHART_DAYS = 30;
+const CHART_WEEKS = 13; // three months
 
 function bucket(story, now) {
   const t = story.published_at ? new Date(story.published_at).getTime() : new Date(story.fetched_at).getTime();
@@ -38,39 +38,46 @@ function when(story) {
   return d.toLocaleDateString(undefined, thisYear ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" });
 }
 
-// Stories per day per family over the last CHART_DAYS days, as lines.
+// Stories per week per family over the last CHART_WEEKS weeks, as lines.
+// Weekly bins: a daily line over three months is noise; a weekly one is a
+// trend.
 function TrendLines({ stories, family, width }) {
-  const w = width, h = 150, padL = 26, padR = 10, padT = 10, padB = 22;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const days = Array.from({ length: CHART_DAYS }, (_, i) => today.getTime() - (CHART_DAYS - 1 - i) * DAY);
-  const series = RISK_FAMILIES.filter((f) => !family || f.key === family).map((f) => ({
-    key: f.key,
-    counts: days.map((d) => stories.filter((s) => {
-      const t = new Date(s.published_at || s.fetched_at); t.setHours(0, 0, 0, 0);
-      return t.getTime() === d && (s.families || []).includes(f.key);
-    }).length),
-  }));
+  const w = width, h = 160, padL = 28, padR = 10, padT = 10, padB = 24;
+  const WEEK = 7 * DAY;
+  const end = new Date(); end.setHours(0, 0, 0, 0);
+  const start = end.getTime() - (CHART_WEEKS - 1) * WEEK;
+  const weekIndex = (t) => Math.floor((t - start) / WEEK);
+  const series = RISK_FAMILIES.filter((f) => !family || f.key === family).map((f) => {
+    const counts = new Array(CHART_WEEKS).fill(0);
+    for (const s of stories) {
+      if (!(s.families || []).includes(f.key)) continue;
+      const i = weekIndex(new Date(s.published_at || s.fetched_at).getTime());
+      if (i >= 0 && i < CHART_WEEKS) counts[i] += 1;
+    }
+    return { key: f.key, counts };
+  });
   const max = Math.max(1, ...series.flatMap((s) => s.counts));
-  const x = (i) => padL + (i * (w - padL - padR)) / (CHART_DAYS - 1);
+  const x = (i) => padL + (i * (w - padL - padR)) / (CHART_WEEKS - 1);
   const y = (n) => padT + (h - padT - padB) * (1 - n / max);
-  const ticks = [0, 9, 19, 29];
+  const ticks = [0, Math.floor(CHART_WEEKS / 3), Math.floor((2 * CHART_WEEKS) / 3), CHART_WEEKS - 1];
+  const label = (i) => new Date(start + i * WEEK).toLocaleDateString(undefined, { day: "numeric", month: "short" });
   return (
     <Svg width={w} height={h}>
-      {[0, max].map((n) => (
+      {[0, Math.ceil(max / 2), max].filter((v, i, a) => a.indexOf(v) === i).map((n) => (
         <React.Fragment key={n}>
           <Line x1={padL} x2={w - padR} y1={y(n)} y2={y(n)} stroke={colors.border} strokeWidth={1} />
-          <SvgText x={padL - 6} y={y(n) + 3} fill={colors.textMuted} fontSize={9} fontFamily={type.fontFamily} textAnchor="end">{n}</SvgText>
+          <SvgText x={padL - 6} y={y(n) + 3.5} fill={colors.textMuted} fontSize={10.5} fontFamily={type.fontFamily} textAnchor="end">{n}</SvgText>
         </React.Fragment>
       ))}
       {ticks.map((i) => (
-        <SvgText key={i} x={x(i)} y={h - 6} fill={colors.textMuted} fontSize={9} fontFamily={type.fontFamily} textAnchor="middle">
-          {new Date(days[i]).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+        <SvgText key={i} x={x(i)} y={h - 6} fill={colors.textMuted} fontSize={10.5} fontFamily={type.fontFamily} textAnchor={i === 0 ? "start" : i === CHART_WEEKS - 1 ? "end" : "middle"}>
+          {label(i)}
         </SvgText>
       ))}
       {series.map((s) => (
         <React.Fragment key={s.key}>
           <Polyline points={s.counts.map((n, i) => `${x(i)},${y(n)}`).join(" ")} fill="none" stroke={FAMILY_TONE[s.key]} strokeWidth={2} strokeLinejoin="round" />
-          {s.counts.map((n, i) => (n ? <Circle key={i} cx={x(i)} cy={y(n)} r={2.5} fill={FAMILY_TONE[s.key]} /> : null))}
+          {s.counts.map((n, i) => (n ? <Circle key={i} cx={x(i)} cy={y(n)} r={3} fill={FAMILY_TONE[s.key]} /> : null))}
         </React.Fragment>
       ))}
     </Svg>
@@ -115,7 +122,7 @@ export default function TrendingRisksScreen() {
 
         {!!stories && (
           <View style={styles.chartCard}>
-            <Text style={styles.chartTitle}>Stories per day, last {CHART_DAYS} days</Text>
+            <Text style={styles.chartTitle}>Stories per week, last 3 months</Text>
             <TrendLines stories={stories} family={family} width={Math.min(width - 40, 600) - 28} />
             <View style={styles.chartLegend}>
               {RISK_FAMILIES.filter((f) => !family || f.key === family).map((f) => (
@@ -196,32 +203,32 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   content: { padding: 20, gap: 14 },
   h1: { fontFamily: type.fontFamilyBold, fontSize: 24, color: colors.textMain, lineHeight: 30 },
-  lede: { fontFamily: type.fontFamily, fontSize: 13, color: colors.textMuted, lineHeight: 19 },
+  lede: { fontFamily: type.fontFamily, fontSize: 14.5, color: colors.textMuted, lineHeight: 21 },
   chartCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 14, gap: 8 },
-  chartTitle: { fontFamily: type.fontFamilyBold, fontSize: 13, color: colors.textMain },
+  chartTitle: { fontFamily: type.fontFamilyBold, fontSize: 14.5, color: colors.textMain },
   chartLegend: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   legendSwatch: { width: 10, height: 10, borderRadius: 2 },
-  legendText: { fontFamily: type.fontFamily, fontSize: 10.5, color: colors.textMuted },
+  legendText: { fontFamily: type.fontFamily, fontSize: 12, color: colors.textMuted },
   chips: { flexDirection: "row", gap: 8, paddingVertical: 2 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.chip, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { fontFamily: type.fontFamilyMedium, fontSize: 12.5, color: colors.textMain },
+  chipText: { fontFamily: type.fontFamilyMedium, fontSize: 14, color: colors.textMain },
   chipTextOn: { color: "#FFFFFF" },
-  chipCount: { fontFamily: type.fontFamily, fontSize: 11.5, color: colors.textMuted, fontVariant: ["tabular-nums"] },
+  chipCount: { fontFamily: type.fontFamily, fontSize: 13, color: colors.textMuted, fontVariant: ["tabular-nums"] },
   chipCountOn: { color: "rgba(255,255,255,0.78)" },
   section: { gap: 10 },
-  sectionTitle: { fontFamily: type.fontFamilyBold, fontSize: 15, color: colors.textMain, marginTop: 6 },
-  empty: { fontFamily: type.fontFamily, fontSize: 13, color: colors.textMuted, lineHeight: 19, marginTop: 20 },
+  sectionTitle: { fontFamily: type.fontFamilyBold, fontSize: 16.5, color: colors.textMain, marginTop: 6 },
+  empty: { fontFamily: type.fontFamily, fontSize: 14.5, color: colors.textMuted, lineHeight: 21, marginTop: 20 },
   card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 14, gap: 8 },
   cardMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
-  outlet: { flex: 1, fontFamily: type.fontFamilyMedium, fontSize: 11, color: colors.textMuted, letterSpacing: 0.4, textTransform: "uppercase" },
-  date: { fontFamily: type.fontFamily, fontSize: 11, color: colors.textMuted },
-  title: { fontFamily: type.fontFamilyBold, fontSize: 15, color: colors.textMain, lineHeight: 21 },
-  summary: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMain, lineHeight: 18 },
+  outlet: { flex: 1, fontFamily: type.fontFamilyMedium, fontSize: 12.5, color: colors.textMuted, letterSpacing: 0.4, textTransform: "uppercase" },
+  date: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMuted },
+  title: { fontFamily: type.fontFamilyBold, fontSize: 16.5, color: colors.textMain, lineHeight: 23 },
+  summary: { fontFamily: type.fontFamily, fontSize: 14, color: colors.textMain, lineHeight: 20 },
   risks: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   riskTag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
-  riskTagText: { fontFamily: type.fontFamilyMedium, fontSize: 10.5, color: colors.primary },
+  riskTagText: { fontFamily: type.fontFamilyMedium, fontSize: 12, color: colors.primary },
   linkRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-  link: { fontFamily: type.fontFamily, fontSize: 11.5, color: colors.secondary },
+  link: { fontFamily: type.fontFamily, fontSize: 13, color: colors.secondary },
 });

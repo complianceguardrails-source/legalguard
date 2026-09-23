@@ -43,8 +43,8 @@ function towardWhite(hex, amount) {
 const DENSITY = { prohibited: 1.0, high_risk: 0.85, limited_risk: 0.6, minimal_risk: 0.42, unclassified: 0.55 };
 
 // Motif occupies the top portion; the card's text sits below it.
-function buildShapes(useCase, W, H) {
-  const tone = useCaseTone(useCase);
+function buildShapes(useCase, W, H, preferred) {
+  const tone = useCaseTone(useCase, preferred);
   const rng = makeRng(seedFrom(useCase.name || ""));
   const density = DENSITY[useCase.risk_tier] ?? 0.55;
   const inks = [towardWhite(tone, 0.22), towardWhite(tone, 0.45), "rgba(255,255,255,0.9)"];
@@ -121,8 +121,8 @@ function buildShapes(useCase, W, H) {
  * @param {number} props.width
  * @param {number} props.height
  */
-export default function UseCaseArt({ useCase, width, height, style, scrim = true }) {
-  const { tone, shapes } = useMemo(() => buildShapes(useCase, width, height), [useCase, width, height]);
+export default function UseCaseArt({ useCase, width, height, style, scrim = true, preferred = [] }) {
+  const { tone, shapes } = useMemo(() => buildShapes(useCase, width, height, preferred), [useCase, width, height, preferred]);
   return (
     <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={style}>
       <Defs>

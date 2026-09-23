@@ -124,9 +124,9 @@ const styles = StyleSheet.create({
   },
   regRowSelected: { borderColor: colors.accent, borderWidth: 1.5 },
   regTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 },
-  regTitle: { fontFamily: type.fontFamilyMedium, fontSize: 13, color: colors.textMain, marginBottom: 2 },
-  regMeta: { fontFamily: type.fontFamily, fontSize: 11, color: colors.textMuted, marginBottom: 4 },
-  regSummary: { fontFamily: type.fontFamily, fontSize: 11, color: colors.textMuted, lineHeight: 15 },
+  regTitle: { fontFamily: type.fontFamilyMedium, fontSize: 14.5, color: colors.textMain, marginBottom: 2 },
+  regMeta: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMuted, marginBottom: 4 },
+  regSummary: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMuted, lineHeight: 17 },
   regBottomRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -136,10 +136,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  regEffective: { fontFamily: type.fontFamily, fontSize: 11, color: colors.textMuted },
+  regEffective: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMuted },
   sourceRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 },
-  sourceText: { fontFamily: type.fontFamily, fontSize: 10, color: colors.textMuted, flexShrink: 1 },
-  sourceBadgeText: { fontFamily: type.fontFamilyMedium, fontSize: 10 },
+  sourceText: { fontFamily: type.fontFamily, fontSize: 11.5, color: colors.textMuted, flexShrink: 1 },
+  sourceBadgeText: { fontFamily: type.fontFamilyMedium, fontSize: 11.5 },
   actionRow: { flexDirection: "row", gap: 8, marginTop: 10 },
   actionButton: {
     flex: 1,
@@ -152,5 +152,5 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   actionButtonDisabled: { opacity: 0.4 },
-  actionButtonText: { fontFamily: type.fontFamilyMedium, fontSize: 11, color: colors.secondary },
+  actionButtonText: { fontFamily: type.fontFamilyMedium, fontSize: 12.5, color: colors.secondary },
 });

@@ -10,7 +10,7 @@ import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, ShieldCheck, Star, Ex
 
 import { colors, type, radius } from "../theme";
 import { fetchRegulations, fetchGuardrailRepos } from "../lib/api";
-import { categoryLabel, categoryTone, useCaseTone, sectorLabel, TIER_LABEL } from "../lib/categories";
+import { categoryLabel, categoryTone, useCaseTone, orderedCategories, sectorLabel, TIER_LABEL } from "../lib/categories";
 import { getDiscoverState, toggleStar, dismiss } from "../lib/discoverState";
 import UseCaseArt from "../components/UseCaseArt";
 import { RISK_FAMILIES, RISK_BY_SLUG } from "../lib/riskTaxonomy";
@@ -25,10 +25,10 @@ const GROUP_TONE = { category: colors.primary, basis: "#8A6A16", baseline: color
 const TIER_VARIANT = { prohibited: "danger", high_risk: "warning", limited_risk: "info", minimal_risk: "success", unclassified: "neutral" };
 
 export default function UseCaseDetailScreen({ route, navigation }) {
-  const { useCase, fromDeck = false } = route.params;
+  const { useCase, fromDeck = false, preferred = [] } = route.params;
   const { width } = useWindowDimensions();
   const heroH = 220;
-  const tone = useCaseTone(useCase);
+  const tone = useCaseTone(useCase, preferred);
 
   const [regulations, setRegulations] = useState(null);
   const [starred, setStarred] = useState(false);
@@ -114,7 +114,7 @@ export default function UseCaseDetailScreen({ route, navigation }) {
     <View style={styles.screen}>
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, fromDeck && { paddingBottom: 96 }]}>
       <View style={[styles.hero, { height: heroH }]}>
-        <UseCaseArt useCase={useCase} width={width} height={heroH} style={StyleSheet.absoluteFill} />
+        <UseCaseArt useCase={useCase} width={width} height={heroH} style={StyleSheet.absoluteFill} preferred={preferred} />
         <View style={styles.heroBar}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.heroBtn} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back">
             <ArrowLeft size={20} color="#FFFFFF" />
@@ -131,7 +131,7 @@ export default function UseCaseDetailScreen({ route, navigation }) {
         </View>
         <View style={styles.heroText}>
           <View style={styles.cats}>
-            {(useCase.categories || []).map((slug) => (
+            {orderedCategories(useCase, preferred).map((slug) => (
               <View key={slug} style={[styles.tag, { backgroundColor: categoryTone(slug) }]}>
                 <Text style={styles.tagText}>{categoryLabel(slug)}</Text>
               </View>
@@ -385,53 +385,53 @@ const styles = StyleSheet.create({
   heroText: { padding: 18, gap: 8 },
   cats: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tag: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 },
-  tagText: { fontFamily: type.fontFamilyMedium, fontSize: 10, letterSpacing: 0.6, color: "#FFFFFF", textTransform: "uppercase" },
+  tagText: { fontFamily: type.fontFamilyMedium, fontSize: 11.5, letterSpacing: 0.6, color: "#FFFFFF", textTransform: "uppercase" },
   title: { fontFamily: type.fontFamilyBold, fontSize: 22, lineHeight: 27, color: "#FFFFFF" },
   section: { paddingHorizontal: 20, paddingTop: 20, gap: 10 },
   h2Row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  h2: { fontFamily: type.fontFamilyBold, fontSize: 15, color: colors.textMain },
-  sectionNote: { fontFamily: type.fontFamily, fontSize: 12, color: colors.textMuted, lineHeight: 17 },
-  body: { fontFamily: type.fontFamily, fontSize: 14, color: colors.textMain, lineHeight: 21 },
-  muted: { fontFamily: type.fontFamily, fontSize: 13, color: colors.textMuted, lineHeight: 19 },
-  provenance: { fontFamily: type.fontFamilyMedium, fontSize: 11, color: colors.textMuted, letterSpacing: 0.4, textTransform: "uppercase" },
+  h2: { fontFamily: type.fontFamilyBold, fontSize: 16.5, color: colors.textMain },
+  sectionNote: { fontFamily: type.fontFamily, fontSize: 13.5, color: colors.textMuted, lineHeight: 19 },
+  body: { fontFamily: type.fontFamily, fontSize: 15.5, color: colors.textMain, lineHeight: 23 },
+  muted: { fontFamily: type.fontFamily, fontSize: 14.5, color: colors.textMuted, lineHeight: 21 },
+  provenance: { fontFamily: type.fontFamilyMedium, fontSize: 12.5, color: colors.textMuted, letterSpacing: 0.4, textTransform: "uppercase" },
   linkRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  link: { fontFamily: type.fontFamily, fontSize: 12, color: colors.secondary, flex: 1 },
+  link: { fontFamily: type.fontFamily, fontSize: 13.5, color: colors.secondary, flex: 1 },
   pills: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tierTap: { flexDirection: "row", alignItems: "center", gap: 4 },
   composition: { gap: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 12 },
-  compositionNote: { fontFamily: type.fontFamily, fontSize: 12, color: colors.textMuted, lineHeight: 17 },
+  compositionNote: { fontFamily: type.fontFamily, fontSize: 13.5, color: colors.textMuted, lineHeight: 19 },
   family: { gap: 8 },
   familyHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  familyLabel: { flex: 1, fontFamily: type.fontFamilyBold, fontSize: 12.5, color: colors.textMain },
+  familyLabel: { flex: 1, fontFamily: type.fontFamilyBold, fontSize: 14, color: colors.textMain },
   riskChips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   riskChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
-  riskChipText: { fontFamily: type.fontFamilyMedium, fontSize: 11.5, color: colors.textMain },
-  riskDescription: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMain, lineHeight: 18, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: colors.border },
+  riskChipText: { fontFamily: type.fontFamilyMedium, fontSize: 13, color: colors.textMain },
+  riskDescription: { fontFamily: type.fontFamily, fontSize: 14, color: colors.textMain, lineHeight: 20, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: colors.border },
   why: { gap: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 12 },
-  whyTitle: { fontFamily: type.fontFamilyBold, fontSize: 13, color: colors.textMain },
-  whyText: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMain, lineHeight: 18 },
+  whyTitle: { fontFamily: type.fontFamilyBold, fontSize: 14.5, color: colors.textMain },
+  whyText: { fontFamily: type.fontFamily, fontSize: 14, color: colors.textMain, lineHeight: 20 },
   whyPhrase: { fontFamily: type.fontFamilyMedium, color: colors.primary },
   basis: { gap: 2, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: colors.border },
-  basisRef: { fontFamily: type.fontFamilyMedium, fontSize: 11, color: colors.textMuted, letterSpacing: 0.3, textTransform: "uppercase" },
+  basisRef: { fontFamily: type.fontFamilyMedium, fontSize: 12.5, color: colors.textMuted, letterSpacing: 0.3, textTransform: "uppercase" },
   group: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, backgroundColor: colors.surface, overflow: "hidden" },
   groupHead: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 12 },
   groupMeta: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
-  groupTitle: { flex: 1, fontFamily: type.fontFamilyBold, fontSize: 13.5, color: colors.textMain },
-  groupKind: { fontFamily: type.fontFamilyMedium, fontSize: 10.5, letterSpacing: 0.5, textTransform: "uppercase" },
-  groupCount: { flexShrink: 0, minWidth: 26, textAlign: "center", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: colors.background, fontFamily: type.fontFamilyMedium, fontSize: 11, color: colors.textMuted, fontVariant: ["tabular-nums"] },
-  groupWhy: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMain, lineHeight: 18 },
+  groupTitle: { flex: 1, fontFamily: type.fontFamilyBold, fontSize: 15, color: colors.textMain },
+  groupKind: { fontFamily: type.fontFamilyMedium, fontSize: 12, letterSpacing: 0.5, textTransform: "uppercase" },
+  groupCount: { flexShrink: 0, minWidth: 26, textAlign: "center", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: colors.background, fontFamily: type.fontFamilyMedium, fontSize: 12.5, color: colors.textMuted, fontVariant: ["tabular-nums"] },
+  groupWhy: { fontFamily: type.fontFamily, fontSize: 14, color: colors.textMain, lineHeight: 20 },
   groupBody: { paddingHorizontal: 12, paddingBottom: 12, gap: 8, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
   callout: { flexDirection: "row", gap: 10, alignItems: "flex-start", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 12 },
-  calloutText: { flex: 1, fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMain, lineHeight: 18 },
+  calloutText: { flex: 1, fontFamily: type.fontFamily, fontSize: 14, color: colors.textMain, lineHeight: 20 },
   repo: { gap: 4, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
   repoHead: { flexDirection: "row", alignItems: "center", gap: 6 },
-  repoName: { flex: 1, fontFamily: type.fontFamilyBold, fontSize: 13, color: colors.textMain },
-  repoDesc: { fontFamily: type.fontFamily, fontSize: 12, color: colors.textMain, lineHeight: 17 },
-  repoMeta: { fontFamily: type.fontFamily, fontSize: 11, color: colors.textMuted },
+  repoName: { flex: 1, fontFamily: type.fontFamilyBold, fontSize: 14.5, color: colors.textMain },
+  repoDesc: { fontFamily: type.fontFamily, fontSize: 13.5, color: colors.textMain, lineHeight: 19 },
+  repoMeta: { fontFamily: type.fontFamily, fontSize: 12.5, color: colors.textMuted },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, flexDirection: "row", gap: 10, padding: 14, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
   footBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 13, borderRadius: radius.button },
   footBtnGhost: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  footBtnGhostText: { fontFamily: type.fontFamilyMedium, fontSize: 14, color: colors.textMain },
+  footBtnGhostText: { fontFamily: type.fontFamilyMedium, fontSize: 15.5, color: colors.textMain },
   footBtnPrimary: { backgroundColor: colors.primary },
-  footBtnPrimaryText: { fontFamily: type.fontFamilyBold, fontSize: 14, color: "#FFFFFF" },
+  footBtnPrimaryText: { fontFamily: type.fontFamilyBold, fontSize: 15.5, color: "#FFFFFF" },
 });

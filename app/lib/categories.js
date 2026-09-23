@@ -56,8 +56,19 @@ export function categoryTone(slug) {
 }
 
 /** The tone a use case is painted in: its first category's. */
-export function useCaseTone(useCase) {
-  return categoryTone((useCase.categories || [])[0]);
+// The card's colour follows the category the reader chose when there is
+// one: a system tagged Compliance + Filings + ESG, dealt in an ESG deck,
+// is an ESG card there. Otherwise its first category.
+export function useCaseTone(useCase, preferred = []) {
+  const cats = useCase.categories || [];
+  const chosen = cats.find((c) => preferred.includes(c));
+  return categoryTone(chosen || cats[0]);
+}
+
+// Categories ordered for display: the chosen ones first, then the rest.
+export function orderedCategories(useCase, preferred = []) {
+  const cats = useCase.categories || [];
+  return [...cats.filter((c) => preferred.includes(c)), ...cats.filter((c) => !preferred.includes(c))];
 }
 
 // Semantic risk-tier colours for the small dot on a card -- separate from

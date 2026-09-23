@@ -6,17 +6,19 @@ import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Star } from "lucide-react-native";
 
 import { type } from "../theme";
-import { categoryLabel, TIER_DOT, TIER_LABEL } from "../lib/categories";
+import { categoryLabel, orderedCategories, TIER_DOT, TIER_LABEL } from "../lib/categories";
 import UseCaseArt from "./UseCaseArt";
 
 const SOURCE_LABEL = { github_mined: "GitHub", huggingface_mined: "Hugging Face" }; // published provenance only
 
-export default function UseCaseCard({ useCase, width, height, starred, onToggleStar }) {
-  const cats = (useCase.categories || []).slice(0, 2);
+export default function UseCaseCard({ useCase, width, height, starred, onToggleStar, preferred = [] }) {
+  // The categories the reader picked lead, so a card dealt in an ESG deck
+  // says ESG first even when the system is also compliance and filings.
+  const cats = orderedCategories(useCase, preferred).slice(0, 3);
   const blurb = (useCase.description || "").startsWith("Hugging Face model") ? "" : useCase.description;
   return (
     <View style={[styles.card, { width, height }]}>
-      <UseCaseArt useCase={useCase} width={width} height={height} style={StyleSheet.absoluteFill} />
+      <UseCaseArt useCase={useCase} width={width} height={height} style={StyleSheet.absoluteFill} preferred={preferred} />
 
       {onToggleStar && (
         <TouchableOpacity
@@ -60,11 +62,11 @@ const styles = StyleSheet.create({
   body: { padding: 18, gap: 8 },
   cats: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tag: { backgroundColor: "rgba(255,255,255,0.18)", paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 },
-  tagText: { fontFamily: type.fontFamilyMedium, fontSize: 10, letterSpacing: 0.6, color: "#FFFFFF", textTransform: "uppercase" },
+  tagText: { fontFamily: type.fontFamilyMedium, fontSize: 11.5, letterSpacing: 0.6, color: "#FFFFFF", textTransform: "uppercase" },
   title: { fontFamily: type.fontFamilyBold, fontSize: 20, lineHeight: 25, color: "#FFFFFF" },
-  blurb: { fontFamily: type.fontFamily, fontSize: 12.5, lineHeight: 18, color: "rgba(255,255,255,0.85)" },
+  blurb: { fontFamily: type.fontFamily, fontSize: 14, lineHeight: 20, color: "rgba(255,255,255,0.85)" },
   meta: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 2 },
   tier: { flexDirection: "row", alignItems: "center", gap: 6 },
   tierDot: { width: 7, height: 7, borderRadius: 4, borderWidth: 2, borderColor: "rgba(255,255,255,0.25)" },
-  metaText: { fontFamily: type.fontFamilyMedium, fontSize: 10.5, letterSpacing: 0.4, color: "rgba(255,255,255,0.82)", textTransform: "uppercase" },
+  metaText: { fontFamily: type.fontFamilyMedium, fontSize: 12, letterSpacing: 0.4, color: "rgba(255,255,255,0.82)", textTransform: "uppercase" },
 });
