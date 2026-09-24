@@ -212,6 +212,82 @@ ACTS: list[EurLexAct] = [
             "7": "Misleading omissions -- leaving out the qualifications that make a green claim true",
         },
     ),
+    # --- Crypto, payments, data and prudential. The four acts above cover
+    # what a firm says; these cover what it runs. Unlike the earlier
+    # entries, CELLAR does carry dated application data for these, so
+    # application_date is sourced rather than hand-entered -- the property
+    # that supplied it is named in application_source.
+    EurLexAct(
+        base_celex="32023R1114",
+        short_name="MiCA",
+        clause_prefix="MICA",
+        application_date="2024-12-30",
+        application_source="Art. 149(2) Regulation (EU) 2023/1114, corroborated by CELLAR cdm:regulation_date_transposition; Titles III and IV applied earlier, from 2024-06-30",
+        articles={
+            "68": "Governance arrangements for crypto-asset service providers -- management-body accountability for an automated service",
+            "73": "Outsourcing -- binds use of external model, data and infrastructure providers",
+            "76": "Operation of a trading platform for crypto-assets -- resilience, capacity and testing of the matching system",
+            "78": "Execution of orders on behalf of clients -- binds automated order routing",
+            "81": "Advice and portfolio management -- the suitability obligation an automated adviser automates",
+            "91": "Prohibition of market manipulation, which Art. 91(2) extends to algorithmic strategies",
+            "92": "Prevention and detection of market abuse -- the surveillance obligation AI monitoring tools serve",
+        },
+    ),
+    EurLexAct(
+        base_celex="32015L2366",
+        short_name="PSD2",
+        clause_prefix="PSD2",
+        application_date="2018-01-13",
+        application_source="Art. 115(2) Directive (EU) 2015/2366, corroborated by CELLAR cdm:directive_date_transposition",
+        articles={
+            "72": "Evidence on authentication and execution -- what a fraud model must be able to show after the fact",
+            "73": "Payment service provider liability for unauthorised transactions -- who carries the cost of a model's false negative",
+            "74": "Payer liability for unauthorised transactions",
+            "95": "Management of operational and security risks",
+            "96": "Incident reporting",
+            "97": "Authentication -- strong customer authentication, and the transaction-risk-analysis exemption that is model-driven by construction",
+            "98": "Regulatory technical standards on authentication and communication -- where the transaction-risk-analysis thresholds live",
+        },
+    ),
+    EurLexAct(
+        base_celex="32023R2854",
+        short_name="Data Act",
+        clause_prefix="DATAACT",
+        application_date="2025-09-12",
+        application_source="Art. 50 Regulation (EU) 2023/2854, corroborated by CELLAR cdm:resource_legal_date_entry-into-force 2025-09-12 (in force since 2024-01-11)",
+        articles={
+            "3": "Obligation to make product and related service data accessible -- where data from connected products may be obtained",
+            "4": "Rights and obligations of users and data holders -- what a data holder may itself do with what it collects",
+            "5": "Right of the user to share data with third parties",
+            "6": "Obligations of third parties receiving data -- binds a model trained on data obtained this way",
+            "13": "Unfair contractual terms unilaterally imposed -- limits what a data-access contract may require",
+            "23": "Removing obstacles to effective switching -- the cloud concentration this catalogue tracks as vendor reliance",
+            "25": "Contractual terms concerning switching",
+        },
+    ),
+    EurLexAct(
+        base_celex="32013R0575",
+        short_name="CRR",
+        clause_prefix="CRR",
+        application_date="2014-01-01",
+        application_source="Art. 521(2) Regulation (EU) No 575/2013, corroborated by CELLAR cdm:resource_legal_date_entry-into-force 2014-01-01",
+        # Article numbers are those of the CRR3-amended consolidation the
+        # resolver picks (02013R0575-20270101). CRR3 rewrote the
+        # market-risk chapter, so the old Arts. 363/366/369 are now
+        # 325az/325bf/325bj -- pinning the old numbers would silently
+        # ingest nothing.
+        articles={
+            "177": "Stress tests used in assessment of capital adequacy",
+            "185": "Validation of internal estimates -- the review a credit model must survive, and the closest thing in EU banking law to a model-validation standard",
+            "189": "Corporate governance of the rating systems -- who in the firm is answerable for the model",
+            "294": "Validation requirements for the internal model method",
+            "323": "Operational risk management framework",
+            "325az": "Alternative internal model approach: the permission a market-risk model needs before it may be used",
+            "325bf": "Regulatory back-testing requirements and multiplication factors -- the model's own error rate, priced",
+            "325bj": "Internal validation of the alternative internal model approach",
+            "449a": "Disclosure of environmental, social and governance risks -- where a bank's ESG analytics surface as a published figure",
+        },
+    ),
 ]
 
 
