@@ -466,7 +466,7 @@ def upsert_trend_forecast(
                  probability_percentage, upstream_catalyst_drivers, underlying_driver_description,
                  impact_blast_radius_summary, affected_use_case_ids)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (trend_key) DO UPDATE SET
+            ON CONFLICT (trend_key) WHERE trend_key IS NOT NULL DO UPDATE SET
                 projected_bill_name = EXCLUDED.projected_bill_name,
                 estimated_arrival_window = EXCLUDED.estimated_arrival_window,
                 probability_percentage = EXCLUDED.probability_percentage,
