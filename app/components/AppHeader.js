@@ -36,6 +36,6 @@ const styles = StyleSheet.create({
   },
   left: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 },
   icon: { width: 34, height: 34, borderRadius: 8 },
-  title: { fontFamily: type.fontFamilyBold, fontSize: 17, color: "#FFFFFF" },
-  subtitle: { fontFamily: type.fontFamily, fontSize: 10, color: "#9FB0C9", marginTop: 1 },
+  title: { fontFamily: type.fontFamilyBold, fontSize: 21, color: "#FFFFFF" },
+  subtitle: { fontFamily: type.fontFamily, fontSize: 12.5, color: "#9FB0C9", marginTop: 2 },
 });

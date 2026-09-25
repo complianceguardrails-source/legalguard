@@ -132,8 +132,7 @@ export default function GuardrailsScreen() {
     >
       <Text style={styles.h1}>Guardrail coverage</Text>
       <Text style={styles.lede}>
-        Every risk in the taxonomy, shaded by how many open-source guardrails control it. Hollow means no tool exists --
-        the FINOS framework may still name an organisational control. Tap a segment.
+        Discover all existing open-source guardrails, published on Hugging Face, GitHub and FINOS.
       </Text>
 
       {!repos ? (

@@ -127,10 +127,10 @@ export default function DiscoverScreen({ navigation }) {
         )}
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.h1}>What are you building?</Text>
+            <Text style={styles.h1}>How risky is your AI?</Text>
             <Text style={styles.lede}>
-              Pick as many as you like -- bigger means more systems. Every use case is a real system published on
-              GitHub or the Hugging Face Hub.
+              Pick any category, swipe through the use cases and learn more about their risks, controls and
+              regulations - updated daily.
             </Text>
           </View>
           <TouchableOpacity
